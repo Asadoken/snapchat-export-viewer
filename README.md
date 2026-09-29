@@ -1,5 +1,7 @@
 # Snapchat Export Viewer
 
+**[Open the viewer →](https://asadoken.github.io/snapchat-export-viewer/)**
+
 Browse the data you download from Snapchat the way it looks in the app. Snapchat's own export pages are plain tables and don't show your chat photos or videos; this page lays everything out properly.
 
 **It runs entirely in your browser.** You open one HTML file and drop in your export folder. Nothing is uploaded, installed or saved.
@@ -21,7 +23,7 @@ It supports light and dark mode and works on phones.
 1. **Get your data.** In Snapchat go to **Settings → My Data** (or [accounts.snapchat.com](https://accounts.snapchat.com) → My Data). Tick **Export your Memories** and **Export JSON files**, choose what to include, and submit. Snapchat emails you when it's ready.
 2. **Unzip it.** Big accounts come in several zip files; unzip them all.
 3. **Open the viewer.** Either:
-   - use the hosted version: `https://<your-github-username>.github.io/snapchat-export-viewer/` (see [Hosting](#hosting-on-github-pages)), or
+   - use the hosted version at **https://asadoken.github.io/snapchat-export-viewer/**, or
    - download `index.html` and double-click it.
 4. **Drop your folder(s) onto the page**, or click to choose the folder.
 
