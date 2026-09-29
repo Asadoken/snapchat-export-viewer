@@ -76,7 +76,7 @@ h2 { font-size: 17px; margin: 30px 0 10px; }
 .chat-head .who-btn:hover { background: var(--hover); }
 .chat-head .title { flex: 1; min-width: 0; }
 .chat-head .title b { display: block; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chat-head .title span { font-size: 13px; color: var(--muted); }
+.chat-head .title span { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-head .search { width: 240px; padding: 6px 12px; }
 .back { display: none; width: 36px; height: 36px; border-radius: 50%; place-items: center; flex: none; }
 .back:hover { background: var(--hover); }
@@ -101,6 +101,17 @@ h2 { font-size: 17px; margin: 30px 0 10px; }
 .play span { width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,.45); display: grid; place-items: center; }
 .cap { margin-top: 4px; }
 audio { height: 36px; max-width: 280px; }
+.seg { display: flex; background: var(--chip); border-radius: 999px; padding: 3px; flex: none; }
+.seg button { padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.seg button.on { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.seg button span { font-weight: 500; opacity: .75; }
+.media-pane { flex: 1; overflow-y: auto; padding: 14px 24px 32px; }
+.media-pane .grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.media-pane .month:first-of-type { margin-top: 8px; }
+.line.flash { animation: flash 1.8s ease-out; }
+@keyframes flash { from { background: color-mix(in oklab, var(--accent) 45%, transparent); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .line.flash { animation: none; background: var(--hover); } }
+.lb .info button { color: #fff; text-decoration: underline; font-size: 14px; }
 .more { display: block; margin: 12px auto; padding: 8px 16px; border-radius: 999px; background: var(--chip); font-size: 13px; font-weight: 600; }
 .more:hover { background: var(--panel2); }
 
@@ -267,6 +278,9 @@ th { color: var(--muted); font-weight: 600; white-space: nowrap; }
   .chat-head { padding: 10px 12px; }
   .chat-head .search { display: none; }
   .msgs { padding: 8px 16px 20px; }
+  .media-pane { padding: 12px 12px 24px; }
+  .media-pane .grid { grid-template-columns: repeat(3, 1fr); gap: 3px; }
+  .seg button { padding: 6px 10px; }
   .page { padding: 18px 16px 32px; }
   .grid { grid-template-columns: repeat(3, 1fr); gap: 3px; }
   .thumb { width: 140px; height: 186px; }
@@ -359,6 +373,12 @@ const fileUrl = (dir, f) => {
   if (!u) { u = URL.createObjectURL(file); urlCache.set(file, u); }
   return u;
 };
+// "b~G…" files are the caption/drawing layer of the other media in the same message
+const isOvFile = f => /^[\d-]+_b~G/.test(f);
+const splitMedia = m => {
+  const mains = m.m.filter(f => !isOvFile(f)), ovs = mains.length ? m.m.filter(isOvFile) : [];
+  return (mains.length ? mains : m.m).map((f, n) => ({ f, ov: ovs[n] || null }));
+};
 const isVid = f => /\.(mp4|mov|m4v|webm)$/i.test(f);
 const isImg = f => /\.(jpe?g|png|gif|webp|heic)$/i.test(f);
 const isAud = f => /\.(m4a|aac|mp3|wav|ogg|opus)$/i.test(f);
@@ -397,9 +417,14 @@ const openLb = (items, idx) => { if (!items.length) return; lbItems = items; lbI
 const closeLb = () => { lb.classList.remove('open'); $('#lbStage').innerHTML = ''; };
 const drawLb = () => {
   const it = lbItems[lbIdx];
-  const main = isVid(it.src) ? `<video src="${it.src}" controls autoplay playsinline></video>` : `<img src="${it.src}" alt="">`;
+  const main = isVid(it.main || it.src) ? `<video src="${it.src}" controls autoplay playsinline></video>` : `<img src="${it.src}" alt="">`;
   $('#lbStage').innerHTML = main + (it.ov ? `<img class="ov" src="${it.ov}" alt="">` : '');
   $('#lbInfo').innerHTML = `${esc(it.label || '')} · ${lbIdx + 1} of ${lbItems.length} · <a href="${it.src}" target="_blank">Open file</a>`;
+  if (it.jump) {
+    const b = document.createElement('button'); b.textContent = 'Show in chat';
+    b.onclick = () => { closeLb(); it.jump(); };
+    $('#lbInfo').append(' · ', b);
+  }
   $('#lbPrev').style.visibility = lbIdx > 0 ? '' : 'hidden';
   $('#lbNext').style.visibility = lbIdx < lbItems.length - 1 ? '' : 'hidden';
 };
@@ -624,12 +649,24 @@ function openChat(id) {
   const palette = ['var(--them)', '#9b59ff', '#20b26b', '#ff8a00', '#e84393', '#00b3a4', '#c0a000'];
   const colorOf = u => u === D.me ? 'var(--me)' : c.group ? palette[others.indexOf(u) % palette.length] : 'var(--them)';
   const first = c.msgs[0], sub = c.group ? `${others.length + 1} members` : '@' + c.user;
+  // every photo and video in this chat, newest first
+  const gallery = [];
+  for (const m of c.msgs) {
+    if (!m.m.length) continue;
+    for (const p of splitMedia(m)) {
+      if (!(isVid(p.f) || isImg(p.f)) || (m.k === 'NOTE' && !isImg(p.f))) continue;
+      gallery.push({ m, f: p.f, ov: p.ov });
+    }
+  }
+  gallery.reverse();
   $('#chatMain').innerHTML = `
     <header class="chat-head"><button class="back" id="back" aria-label="Back">${I.back}</button>
       <button class="who-btn" id="whoBtn" title="View profile">${avatar(c.name, 40)}
       <div class="title"><b>${esc(c.name)}</b><span>${esc(sub)} · ${fmtN(c.msgs.length)} messages${first ? ' since ' + new Date(first.t).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : ''}</span></div></button>
-      <label class="search">${I.search}<input id="mq" placeholder="Search in chat"></label></header>
-    <div class="msgs" id="msgs"><div class="msgs-inner" id="msgsInner"></div></div>`;
+      <label class="search" id="mqWrap">${I.search}<input id="mq" placeholder="Search in chat"></label>
+      <div class="seg" role="tablist" id="seg"><button role="tab" data-tab="chat" class="on" aria-selected="true">Chat</button><button role="tab" data-tab="media" aria-selected="false">Media <span>${fmtN(gallery.length)}</span></button></div></header>
+    <div class="msgs" id="msgs"><div class="msgs-inner" id="msgsInner"></div></div>
+    <div class="media-pane" id="mediaPane" hidden></div>`;
   $('#back').onclick = () => $('#app').classList.remove('chat-open');
   $('#whoBtn').onclick = () => openFriend(c.id);
 
@@ -644,16 +681,12 @@ function openChat(id) {
     if (m.k === 'STATUSERASEDMESSAGE') return '<span class="pill italic">Message deleted</span>';
     let html = '';
     if (m.m.length) {
-      // "b~G…" files are the caption/drawing layer of the other media in the same message
-      const isOv = f => /^[\d-]+_b~G/.test(f);
-      const mains = m.m.filter(f => !isOv(f));
-      const ovs = mains.length ? m.m.filter(isOv) : [];
-      html += '<div class="media-row">' + (mains.length ? mains : m.m).map((f, n) => {
-        const src = fileUrl('chat_media', f);
+      html += '<div class="media-row">' + splitMedia(m).map(p => {
+        const f = p.f, src = fileUrl('chat_media', f);
         if (isAud(f) || (m.k === 'NOTE' && !isImg(f))) return `<audio controls preload="none" src="${src}"></audio>`;
         if (!isVid(f) && !isImg(f)) return '';
-        const ov = ovs[n] ? fileUrl('chat_media', ovs[n]) : null;
-        const i = mediaItems.push({ src, ov, label: `${nameOf(m.f)} · ${new Date(m.t).toLocaleString()}` }) - 1;
+        const ov = p.ov ? fileUrl('chat_media', p.ov) : null;
+        const i = mediaItems.push({ src, ov, main: f, label: `${nameOf(m.f)} · ${new Date(m.t).toLocaleString()}` }) - 1;
         return `<div class="thumb" data-i="${i}">${isVid(f)
           ? `<video muted playsinline preload="metadata" data-src="${src}"></video><div class="play"><span>${I.play}</span></div>`
           : `<img loading="lazy" data-src="${src}" alt="">`}${ov ? `<img class="ov" data-src="${ov}" alt="">` : ''}</div>`;
@@ -680,7 +713,7 @@ function openChat(id) {
         out += (lastFrom !== null ? '</div>' : '') + `<div class="grp"><div class="who" style="color:${col}">${m.f === D.me ? 'Me' : esc(nameOf(m.f))}</div>`;
         lastFrom = m.f;
       }
-      out += `<div class="line" style="border-color:${colorOf(m.f)}">${body(m, qre)}<time>${timeOf(m.t)}</time></div>`;
+      out += `<div class="line" data-t="${m.t}" style="border-color:${colorOf(m.f)}">${body(m, qre)}<time>${timeOf(m.t)}</time></div>`;
     }
     return out + (lastFrom !== null ? '</div>' : '');
   };
@@ -709,6 +742,68 @@ function openChat(id) {
       list = q ? c.msgs.filter(m => m.c.toLowerCase().includes(ql)) : c.msgs;
       shown = PAGE; draw(true);
     }, 150);
+  };
+
+  // Chat / Media tabs
+  const pane = $('#mediaPane');
+  let galleryDrawn = false;
+  const setTab = tab => {
+    $('#seg').querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.tab === tab); b.setAttribute('aria-selected', b.dataset.tab === tab); });
+    box.hidden = tab !== 'chat'; pane.hidden = tab !== 'media';
+    $('#mqWrap').style.visibility = tab === 'chat' ? '' : 'hidden';
+    if (tab === 'media' && !galleryDrawn) { galleryDrawn = true; drawGallery(); }
+  };
+  $('#seg').onclick = e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.tab); };
+
+  const jumpTo = t => {
+    setTab('chat');
+    if (q) { q = ''; $('#mq').value = ''; list = c.msgs; }
+    const idx = list.findIndex(m => m.t === t);
+    if (idx >= 0) shown = Math.max(shown, list.length - idx + 30);
+    draw(true);
+    const el = inner.querySelector(`.line[data-t="${t}"]`);
+    if (el) { el.scrollIntoView({ block: 'center' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+  };
+
+  let gType = 'all', gFrom = '';
+  const drawGallery = () => {
+    const senders = [...new Set(gallery.map(g => g.m.f))];
+    const items = gallery.filter(g => (gType === 'all' || (gType === 'vid') === isVid(g.f)) && (!gFrom || g.m.f === gFrom))
+      .map(g => ({ src: fileUrl('chat_media', g.f), ov: g.ov ? fileUrl('chat_media', g.ov) : null, main: g.f, t: g.m.t,
+        label: `${g.m.f === D.me ? 'You' : nameOf(g.m.f)} · ${fmtDT(g.m.t)}`, jump: () => jumpTo(g.m.t) }));
+    const vids = gallery.filter(g => isVid(g.f)).length;
+    pane.innerHTML = !gallery.length
+      ? '<div class="empty" style="padding:60px 0">No photos or videos in this chat were included in the export</div>'
+      : `<div class="chips" id="gChips">
+        ${[['all', 'All'], ['img', `Photos ${fmtN(gallery.length - vids)}`], ['vid', `Videos ${fmtN(vids)}`]].map(([k, l]) => `<button data-g="${k}" class="${gType === k ? 'on' : ''}">${l}</button>`).join('')}
+        ${senders.length > 1 ? `<select id="gFrom" aria-label="Sent by"><option value="">From everyone</option>${senders.map(u => `<option value="${esc(u)}"${u === gFrom ? ' selected' : ''}>From ${esc(u === D.me ? 'you' : nameOf(u))}</option>`).join('')}</select>` : ''}
+      </div><div id="gGrid"></div><div id="gSentinel" style="height:1px"></div>`;
+    if (!gallery.length) return;
+    $('#gChips').onclick = e => { const b = e.target.closest('button'); if (b) { gType = b.dataset.g; drawGallery(); } };
+    const sel = $('#gFrom'); if (sel) sel.onchange = e => { gFrom = e.target.value; drawGallery(); };
+    const grid = $('#gGrid');
+    if (!items.length) { grid.innerHTML = '<div class="empty" style="padding:40px 0">Nothing here</div>'; return; }
+    let done = 0, lastMonth = null, cur = null;
+    const batch = () => {
+      const end = Math.min(items.length, done + 120);
+      for (; done < end; done++) {
+        const it = items[done], d = new Date(it.t), mo = d.getFullYear() * 12 + d.getMonth();
+        if (mo !== lastMonth) {
+          lastMonth = mo;
+          const h = document.createElement('div'); h.className = 'month';
+          h.textContent = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+          cur = document.createElement('div'); cur.className = 'grid';
+          grid.append(h, cur);
+        }
+        cur.insertAdjacentHTML('beforeend', memTile(it, done));
+      }
+      lazy(grid);
+    };
+    batch();
+    new IntersectionObserver(es => { if (es[0].isIntersecting && done < items.length) batch(); }, { root: pane, rootMargin: '1000px' }).observe($('#gSentinel'));
+    grid.onclick = e => { const t = e.target.closest('.tile'); if (t) openLb(items, +t.dataset.i); };
+    grid.onmouseover = e => { const v = e.target.closest('.tile')?.querySelector('video[src]'); if (v) v.play().catch(() => {}); };
+    grid.onmouseout = e => { const v = e.target.closest('.tile')?.querySelector('video'); if (v && !e.relatedTarget?.closest?.('.tile')) v.pause(); };
   };
 }
 

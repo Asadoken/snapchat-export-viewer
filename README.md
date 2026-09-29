@@ -8,7 +8,7 @@ Browse the data you download from Snapchat the way it looks in the app. Snapchat
 
 ## What you get
 
-- **Chats**: every conversation with its messages, photos, videos and voice notes. Captions are shown on top of the media, like in the app. Includes Snaps sent and received, and search within a chat or across your chat list.
+- **Chats**: every conversation with its messages, photos, videos and voice notes. Captions are shown on top of the media, like in the app. Includes Snaps sent and received, and search within a chat or across your chat list. Each chat has a **Media** tab with all its photos and videos by month; filter by type or sender, and jump from any of them back to the message.
 - **Map**: memories plotted where you took them, places Snapchat logged you at, your home and work as Snapchat worked them out, and the places you posted from.
 - **Stories**: story circles for the accounts you watch most, views on your own story, and your Spotlight topics.
 - **Memories**: a grid by month with an "On this day" row. Filter by photos, videos or year, and open anything full screen.
