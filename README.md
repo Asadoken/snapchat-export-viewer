@@ -29,6 +29,16 @@ It supports light and dark mode and works on phones.
 
 Works in current Chrome, Edge, Firefox and Safari. Very large exports (tens of GB) are fine, because media is read only when it's on screen.
 
+### Open it instantly next time (optional)
+
+If you have Python 3, you can put a copy inside your export folder that opens straight away, without choosing the folder each time:
+
+```bash
+python3 tools/build_local.py /path/to/your/unzipped/export
+```
+
+This writes `Snapchat Viewer.html` and `viewer/data.js` into that folder. Double-click the HTML file to open it. Re-run the command after updating the viewer.
+
 ## Privacy
 
 - Your files are read by your browser with the standard File API and shown through temporary `blob:` URLs. Nothing is sent to a server, and nothing is kept after you close the tab.

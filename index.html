@@ -316,6 +316,8 @@ th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 <script>
 (() => {
 let D = null;
+// true when a prebuilt viewer/data.js sits next to the page (tools/build_local.py); media is then read by relative path
+let LOCAL = false;
 const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const I = {
@@ -368,6 +370,7 @@ const ago = t => {
 // Media stays on the viewer's disk: files are read through blob URLs made on first use
 const FILES = { chat_media: new Map(), memories: new Map() }, urlCache = new Map();
 const fileUrl = (dir, f) => {
+  if (LOCAL) return dir + '/' + encodeURIComponent(f);
   const file = FILES[dir]?.get(f); if (!file) return '';
   let u = urlCache.get(file);
   if (!u) { u = URL.createObjectURL(file); urlCache.set(file, u); }
@@ -520,7 +523,7 @@ let view = 'chats';
 const drawRail = () => {
   $('#rail').innerHTML = `<div class="logo">${I.ghost}</div>` +
     VIEWS.map(([k, label, icon]) => `<button data-v="${k}" class="${view === k ? 'on' : ''}" aria-label="${label}">${icon}<span class="tip">${label}</span></button>`).join('') +
-    `<div class="spacer"></div><button data-open-other aria-label="Open another export">${I.folder}<span class="tip">Open another export</span></button><button data-theme-toggle aria-label="Toggle theme">${I.theme}<span class="tip">Light / dark</span></button>`;
+    `<div class="spacer"></div>${LOCAL ? '' : `<button data-open-other aria-label="Open another export">${I.folder}<span class="tip">Open another export</span></button>`}<button data-theme-toggle aria-label="Toggle theme">${I.theme}<span class="tip">Light / dark</span></button>`;
 };
 $('#rail').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -1310,8 +1313,14 @@ function drawLanding() {
 // Hook for tests and tooling: SnapViewer.load([{ path, file }])
 window.SnapViewer = { load: entries => load(async () => entries) };
 
-drawRail();
-drawLanding();
+if (window.SNAP) {
+  LOCAL = true; D = window.SNAP;
+  storyViews = D.stories['Friend and Public Story Views'] || [];
+  go('chats');
+} else {
+  drawRail();
+  drawLanding();
+}
 })();
 </script>
 </body>

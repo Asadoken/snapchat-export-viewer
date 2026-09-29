@@ -11,3 +11,4 @@ html/
 demo-export/
 
 .DS_Store
+__pycache__/
