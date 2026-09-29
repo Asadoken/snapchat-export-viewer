@@ -1,0 +1,13 @@
+# Never commit real Snapchat data
+mydata*/
+mydata*.zip
+*.zip
+chat_media/
+memories/
+json/
+html/
+
+# Generated sample data (recreate with tools/make_demo_export.py)
+demo-export/
+
+.DS_Store

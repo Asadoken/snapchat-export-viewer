@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snapchat Export Viewer</title>
+<meta name="description" content="Browse your Snapchat data export like the app: chats with photos and videos, memories, a map, stories and a recap. Runs entirely in your browser.">
+<style>
+:root {
+  --bg: #ffffff; --panel: #f6f6f7; --panel2: #ececee; --hover: #eeeef0; --text: #16161a;
+  --muted: #6f6f76; --line: #e3e3e6; --accent: #fffc00; --accent-ink: #000;
+  --me: #f23c57; --them: #0eadff; --video: #a05dcd; --chip: #f0f0f2;
+  --c-me: #e0304c; --c-them: #0a8fd6; --grid: #e6e6e9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121212; --panel: #1b1b1d; --panel2: #262629; --hover: #242427; --text: #f4f4f5;
+    --muted: #8e8e95; --line: #2c2c30; --chip: #232326; --c-me: #f23c57; --c-them: #1b96dc; --grid: #2a2a2e;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121212; --panel: #1b1b1d; --panel2: #262629; --hover: #242427; --text: #f4f4f5;
+  --muted: #8e8e95; --line: #2c2c30; --chip: #232326; --c-me: #f23c57; --c-them: #1b96dc; --grid: #2a2a2e;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text); overflow: hidden;
+  font: 15px/1.4 "Avenir Next", Avenir, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+svg { display: block; }
+h2 { font-size: 17px; margin: 30px 0 10px; }
+.app { display: flex; height: 100vh; height: 100dvh; }
+.body { flex: 1; display: flex; min-width: 0; min-height: 0; }
+
+/* rail */
+.rail { width: 72px; flex: none; background: var(--panel); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 4px; }
+.logo { width: 40px; height: 40px; border-radius: 12px; background: var(--accent); display: grid; place-items: center; margin-bottom: 12px; }
+.rail button { width: 48px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: var(--muted); position: relative; }
+.rail button:hover { background: var(--hover); color: var(--text); }
+.rail button.on { color: var(--text); background: var(--panel2); }
+.rail button .tip { position: absolute; left: 58px; background: var(--text); color: var(--bg); font-size: 12px; font-weight: 600;
+  padding: 4px 8px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 1000; }
+.rail button:hover .tip { opacity: 1; }
+.rail .spacer { flex: 1; }
+
+/* chat list */
+.list { width: 360px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; background: var(--bg); min-width: 0; }
+.list-head { padding: 18px 16px 10px; }
+.list-head h1 { font-size: 22px; margin: 0 0 12px; font-weight: 700; letter-spacing: -.01em; }
+.search { display: flex; align-items: center; gap: 8px; background: var(--chip); border-radius: 999px; padding: 8px 14px; color: var(--muted); }
+.search input { border: 0; outline: 0; background: none; flex: 1; min-width: 0; }
+.search input::placeholder { color: var(--muted); }
+.convs { overflow-y: auto; flex: 1; padding: 4px 8px 16px; }
+.conv { display: flex; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 12px; cursor: pointer; width: 100%; text-align: left; }
+.conv:hover { background: var(--hover); }
+.conv.on { background: var(--panel2); }
+.conv .meta { min-width: 0; flex: 1; }
+.conv .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.status .preview { overflow: hidden; text-overflow: ellipsis; }
+.avatar { flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #fff; text-transform: uppercase; }
+.sq { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+.sq.hollow { background: none !important; border: 2px solid; }
+
+/* main */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+.empty { flex: 1; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 24px; }
+.empty .ghost { width: 72px; height: 72px; border-radius: 22px; background: var(--accent); display: grid; place-items: center; margin: 0 auto 16px; }
+.chat-head { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); min-height: 64px; }
+.chat-head .who-btn { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; text-align: left; border-radius: 12px; padding: 4px 8px 4px 4px; margin-left: -4px; }
+.chat-head .who-btn:hover { background: var(--hover); }
+.chat-head .title { flex: 1; min-width: 0; }
+.chat-head .title b { display: block; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-head .title span { font-size: 13px; color: var(--muted); }
+.chat-head .search { width: 240px; padding: 6px 12px; }
+.back { display: none; width: 36px; height: 36px; border-radius: 50%; place-items: center; flex: none; }
+.back:hover { background: var(--hover); }
+.msgs { flex: 1; overflow-y: auto; padding: 8px 24px 24px; }
+.msgs-inner { max-width: 760px; margin: 0 auto; }
+.day { text-align: center; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+.grp { margin-top: 12px; }
+.who { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 2px; }
+.line { position: relative; border-left: 2px solid; padding: 3px 64px 3px 10px; white-space: pre-wrap; word-wrap: break-word; }
+.line:hover { background: var(--hover); }
+.line time { position: absolute; right: 8px; top: 4px; font-size: 11px; color: var(--muted); opacity: 0; }
+.line:hover time { opacity: 1; }
+.line a { color: var(--them); }
+.line mark { background: var(--accent); color: var(--accent-ink); border-radius: 3px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.pill.italic { font-style: italic; font-weight: 400; }
+.media-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0; }
+.thumb { position: relative; width: 180px; height: 240px; border-radius: 10px; overflow: hidden; background: var(--panel2); cursor: zoom-in; flex: none; }
+.thumb img, .thumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .ov { pointer-events: none; }
+.play { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.play span { width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,.45); display: grid; place-items: center; }
+.cap { margin-top: 4px; }
+audio { height: 36px; max-width: 280px; }
+.more { display: block; margin: 12px auto; padding: 8px 16px; border-radius: 999px; background: var(--chip); font-size: 13px; font-weight: 600; }
+.more:hover { background: var(--panel2); }
+
+/* pages */
+.page { flex: 1; overflow-y: auto; padding: 24px 32px 56px; }
+.page-inner { max-width: 1100px; margin: 0 auto; }
+.page h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -.01em; }
+.sub { color: var(--muted); margin: 0 0 18px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+.chips button, .chip { padding: 7px 14px; border-radius: 999px; background: var(--chip); font-size: 14px; font-weight: 600; }
+.chips button.on { background: var(--text); color: var(--bg); }
+.chip { display: inline-block; font-weight: 500; font-size: 13px; padding: 6px 12px; }
+.chips select { font: inherit; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 999px; background: var(--chip); color: var(--text); border: 0; }
+.month { font-size: 17px; font-weight: 700; margin: 26px 0 10px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.tile { position: relative; aspect-ratio: 9 / 16; border-radius: 10px; overflow: hidden; background: var(--panel2); cursor: zoom-in; }
+.tile img, .tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.tile .ov { pointer-events: none; }
+.tile .badge { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.55); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+.otd { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; }
+.otd .tile { width: 120px; flex: none; }
+.rows { background: var(--panel); border-radius: 16px; overflow: hidden; }
+.row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+button.row { width: 100%; text-align: left; }
+button.row:hover { background: var(--hover); }
+.row .meta { flex: 1; min-width: 0; }
+.row .meta > div:first-child { font-weight: 600; }
+.row .muted, .muted { color: var(--muted); font-size: 13px; }
+.row .act { padding: 6px 12px; border-radius: 999px; background: var(--chip); font-size: 13px; font-weight: 600; }
+.row .act:hover { background: var(--panel2); }
+.row .ico { width: 36px; height: 36px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; flex: none; font-size: 17px; }
+.card { background: var(--panel); border-radius: 20px; padding: 28px; display: flex; gap: 24px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.score { display: inline-flex; align-items: center; gap: 6px; background: var(--accent); color: #000; font-weight: 700; border-radius: 999px; padding: 4px 12px; font-size: 14px; margin-top: 8px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat { background: var(--panel); border-radius: 16px; padding: 16px; }
+.stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.two > div > h2:first-child { margin-top: 30px; }
+details.raw { background: var(--panel); border-radius: 14px; margin-bottom: 8px; }
+details.raw summary { padding: 14px 18px; font-weight: 700; cursor: pointer; }
+.kv { display: grid; grid-template-columns: minmax(140px, 260px) 1fr; gap: 6px 16px; padding: 0 18px 16px; font-size: 14px; overflow-x: auto; }
+.kv > div:nth-child(odd) { color: var(--muted); }
+.kv > div { word-break: break-word; }
+table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.tbl { overflow-x: auto; padding: 0 18px 16px; }
+th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+
+/* charts */
+.chart-card { background: var(--panel); border-radius: 18px; padding: 18px 18px 12px; }
+.chart-card h3 { margin: 0; font-size: 15px; }
+.chart-card .desc { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
+.legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart { position: relative; }
+.chart svg text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+.chart .hit { fill: transparent; cursor: default; outline: none; }
+.chart .hit:hover, .chart .hit:focus { fill: var(--text); fill-opacity: .05; }
+.dt summary { font-size: 12px; color: var(--muted); cursor: pointer; margin-top: 6px; }
+.dt table { margin-top: 6px; }
+.dt td, .dt th { padding: 3px 12px 3px 0; font-variant-numeric: tabular-nums; }
+.heat { display: grid; grid-template-columns: 34px repeat(24, 1fr); gap: 2px; font-size: 11px; color: var(--muted); }
+.heat div { height: 20px; border-radius: 3px; }
+.heat .lab { background: none; display: flex; align-items: center; }
+.heat .hx { background: none; height: auto; text-align: center; }
+.heat .cell:hover { outline: 2px solid var(--text); outline-offset: -1px; }
+.hbars { display: grid; grid-template-columns: minmax(80px, 180px) 1fr auto; gap: 8px 12px; align-items: center; font-size: 14px; }
+.hbars .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbars .lbl button { text-align: left; font-weight: 600; }
+.hbars .lbl button:hover { text-decoration: underline; }
+.hbars .track { height: 12px; }
+.hbars .fill { height: 100%; background: var(--c-them); border-radius: 0 4px 4px 0; min-width: 2px; }
+.hbars .val { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; text-align: right; }
+.emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
+.emoji-grid div { background: var(--panel); border-radius: 14px; padding: 10px 6px; text-align: center; }
+.emoji-grid b { display: block; font-size: 28px; line-height: 1.2; font-weight: 400; }
+#tip { position: fixed; z-index: 2000; pointer-events: none; background: var(--text); color: var(--bg); border-radius: 10px; padding: 8px 10px;
+  font-size: 12px; min-width: 110px; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+#tip .t { font-weight: 700; margin-bottom: 4px; opacity: .75; }
+#tip .r { display: flex; align-items: center; gap: 8px; }
+#tip .r i { width: 12px; height: 2px; border-radius: 1px; display: inline-block; }
+#tip .r b { font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* stories */
+.rings { display: flex; gap: 16px; overflow-x: auto; padding: 4px 2px 12px; }
+.ring { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 76px; flex: none; font-size: 12px; text-align: center; }
+.ring .rg { padding: 3px; border-radius: 50%; background: conic-gradient(from 200deg, #a05dcd, #0eadff, #a05dcd); }
+.ring .rg > div { border: 3px solid var(--bg); }
+.ring .nm { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* map */
+.mapwrap { flex: 1; display: flex; min-width: 0; }
+.mappanel { width: 360px; flex: none; overflow-y: auto; border-right: 1px solid var(--line); padding: 18px 16px 32px; }
+.mappanel h1 { font-size: 22px; margin: 0 0 4px; }
+.mappanel h2 { font-size: 15px; margin: 22px 0 8px; }
+#map { flex: 1; min-width: 0; background: var(--panel2); }
+.mc { background: var(--accent); color: #000; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 12px;
+  box-shadow: 0 0 0 3px rgba(255,252,0,.35), 0 2px 6px rgba(0,0,0,.35); border: 2px solid #fff; width: 100%; height: 100%; }
+.md { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.pin { background: #fff; color: #000; font-weight: 700; font-size: 12px; border-radius: 999px; padding: 4px 10px 4px 6px; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35); display: inline-flex; gap: 4px; align-items: center; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel) !important; color: var(--text) !important; }
+.leaflet-popup-content { margin: 12px 14px !important; font: 14px/1.4 "Avenir Next", Avenir, -apple-system, sans-serif; }
+.leaflet-popup-content button { margin-top: 8px; background: var(--accent); color: #000; font-weight: 700; border-radius: 999px; padding: 6px 12px; font-size: 13px; }
+.leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+.map-note { padding: 40px; color: var(--muted); text-align: center; }
+
+/* sheets */
+.lb, .sheet-bg { position: fixed; inset: 0; display: none; z-index: 1500; }
+.lb { background: rgba(0,0,0,.92); }
+.lb.open { display: flex; align-items: center; justify-content: center; }
+.lb .stage { position: relative; height: calc(100% - 96px); aspect-ratio: 9 / 16; max-width: calc(100% - 140px); }
+.lb .stage img, .lb .stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.lb .stage .ov { pointer-events: none; }
+.lb .x, .lb .nav, .sheet .x { position: absolute; width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.12); color: #fff; display: grid; place-items: center; }
+.lb .x:hover, .lb .nav:hover { background: rgba(255,255,255,.24); }
+.lb .x { top: 16px; right: 16px; }
+.lb .prev { left: 20px; top: 50%; margin-top: -22px; }
+.lb .next { right: 20px; top: 50%; margin-top: -22px; }
+.lb .info { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; color: #ddd; font-size: 14px; }
+.lb a { color: #fff; }
+.sheet-bg { background: rgba(0,0,0,.5); }
+.sheet-bg.open { display: flex; align-items: center; justify-content: center; padding: 20px; }
+.sheet { position: relative; background: var(--bg); border-radius: 24px; width: 100%; max-width: 480px; max-height: 100%; overflow-y: auto; padding: 28px 24px 24px; }
+.sheet .x { top: 14px; right: 14px; width: 36px; height: 36px; background: var(--chip); color: var(--text); }
+.sheet .head { text-align: center; }
+.sheet .head .avatar { margin: 0 auto 12px; }
+.sheet .head h2 { margin: 0; font-size: 22px; }
+.badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 14px 0 18px; }
+.badges span { background: var(--chip); border-radius: 999px; padding: 5px 11px; font-size: 13px; font-weight: 600; }
+.sheet .stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sheet .stat { padding: 12px; }
+.sheet .stat b { font-size: 19px; }
+.cta { display: block; width: 100%; margin-top: 16px; background: var(--accent); color: #000; font-weight: 700; border-radius: 999px; padding: 12px; }
+.cta:hover { filter: brightness(.95); }
+
+/* landing */
+.app.landing .rail { display: none; }
+.land { flex: 1; overflow-y: auto; display: grid; place-items: center; padding: 32px 16px; }
+.land-card { max-width: 520px; width: 100%; text-align: center; }
+.land-card h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -.01em; }
+.drop { display: flex; flex-direction: column; gap: 6px; align-items: center; border: 2px dashed var(--line); border-radius: 20px; padding: 36px 20px;
+  margin: 22px 0 12px; cursor: pointer; background: var(--panel); transition: border-color .15s, background .15s; }
+.drop:hover, .drop:focus-visible, .drop.over { border-color: var(--text); outline: none; }
+.drop.over { background: var(--panel2); }
+.land-status { min-height: 20px; font-weight: 600; margin: 0 0 12px; }
+.land-status.err { color: var(--me); }
+.howto { text-align: left; background: var(--panel); border-radius: 14px; margin-top: 18px; }
+.howto summary { padding: 12px 16px; font-weight: 600; cursor: pointer; }
+.howto ol { margin: 0; padding: 0 20px 14px 36px; }
+.howto li { margin-bottom: 6px; }
+
+@media (max-width: 760px) {
+  .app { flex-direction: column-reverse; }
+  .rail { width: 100%; flex-direction: row; justify-content: space-around; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid var(--line); gap: 0; }
+  .rail button { width: 42px; height: 42px; }
+  .rail .logo, .rail .spacer, .rail .tip, .rail [data-open-other] { display: none; }
+  .list { width: 100%; border-right: 0; }
+  .app.chat-open .list { display: none; }
+  .app:not(.chat-open) .chat-main { display: none; }
+  .back { display: grid; }
+  .chat-head { padding: 10px 12px; }
+  .chat-head .search { display: none; }
+  .msgs { padding: 8px 16px 20px; }
+  .page { padding: 18px 16px 32px; }
+  .grid { grid-template-columns: repeat(3, 1fr); gap: 3px; }
+  .thumb { width: 140px; height: 186px; }
+  .lb .stage { max-width: 100%; height: calc(100% - 120px); }
+  .lb .nav { top: auto; bottom: 56px; margin: 0; }
+  .kv { grid-template-columns: 1fr; }
+  .kv > div:nth-child(even) { margin-bottom: 8px; }
+  .two { grid-template-columns: 1fr; }
+  .mapwrap { flex-direction: column-reverse; }
+  .mappanel { width: 100%; border-right: 0; border-top: 1px solid var(--line); height: 45%; }
+  #map { flex: 1; }
+  .heat { grid-template-columns: 30px repeat(24, 1fr); gap: 1px; }
+  .heat div { height: 14px; }
+  .sheet-bg.open { align-items: flex-end; padding: 0; }
+  .sheet { border-radius: 24px 24px 0 0; max-height: 92%; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="rail" id="rail"></nav>
+  <div class="body" id="body"></div>
+</div>
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Media viewer">
+  <div class="stage" id="lbStage"></div>
+  <button class="x" id="lbX" aria-label="Close"></button>
+  <button class="nav prev" id="lbPrev" aria-label="Previous"></button>
+  <button class="nav next" id="lbNext" aria-label="Next"></button>
+  <div class="info" id="lbInfo"></div>
+</div>
+<div class="sheet-bg" id="sheetBg" role="dialog" aria-modal="true" aria-label="Friend profile"><div class="sheet" id="sheet"></div></div>
+<div id="tip" role="tooltip"></div>
+<script>
+(() => {
+let D = null;
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const I = {
+  map: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+  chat: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+  stories: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 3a9 9 0 0 1 9 9M21 12a9 9 0 0 1-9 9" /><path d="M12 21a9 9 0 0 1-9-9M3 12a9 9 0 0 1 9-9" stroke-dasharray="2 3.2"/></svg>',
+  mem: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2.5"/><path d="M8 4h10.5A2.5 2.5 0 0 1 21 6.5V15"/></svg>',
+  recap: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>',
+  friends: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.7.8 2.7 2.5 3 5.2"/></svg>',
+  me: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.5c1.3-2 3.2-3 5.5-3s4.2 1 5.5 3"/></svg>',
+  theme: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg>',
+  search: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  back: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  next: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  x: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  play: '<svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>',
+  ghost: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M4 5h16v11H9l-5 4z" fill="#fff"/><path d="M9 10.5h6M12 7.5v6"/></svg>',
+  folder: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>',
+};
+
+/* ---------- helpers ---------- */
+const hue = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
+const avatar = (name, size = 44) => {
+  const initials = (String(name).match(/[\p{L}\p{N}]/gu) || ['?']).slice(0, 2).join('');
+  return `<div class="avatar" style="width:${size}px;height:${size}px;font-size:${Math.round(size * .36)}px;background:hsl(${hue(name)} 55% 48%)">${esc(initials)}</div>`;
+};
+const nameOf = u => D.names[u] || u;
+const fmtN = n => Number(n || 0).toLocaleString();
+const pd = s => { if (!s) return null; const d = new Date(String(s).trim().replace(/\//g, '-').replace(' UTC', 'Z').replace(' ', 'T')); return isNaN(d) ? null : d; };
+const fmtD = (d, o = { day: 'numeric', month: 'short', year: 'numeric' }) => d ? new Date(d).toLocaleDateString(undefined, o) : '—';
+const fmtDT = d => d ? new Date(d).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+const dayKey = t => new Date(t).toDateString();
+const dayNum = t => Math.floor((t - new Date(t).getTimezoneOffset() * 6e4) / 864e5);
+const dayLabel = t => {
+  const d = new Date(t), now = new Date(), days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 864e5);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return d.toLocaleDateString(undefined, { weekday: 'long' });
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' });
+};
+const timeOf = t => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+const ago = t => {
+  const s = (Date.now() - t) / 1000;
+  if (s < 3600) return Math.max(1, Math.round(s / 60)) + 'm';
+  if (s < 86400) return Math.round(s / 3600) + 'h';
+  if (s < 604800) return Math.round(s / 86400) + 'd';
+  if (s < 31536000) return Math.round(s / 604800) + 'w';
+  return new Date(t).getFullYear();
+};
+// Media stays on the viewer's disk: files are read through blob URLs made on first use
+const FILES = { chat_media: new Map(), memories: new Map() }, urlCache = new Map();
+const fileUrl = (dir, f) => {
+  const file = FILES[dir]?.get(f); if (!file) return '';
+  let u = urlCache.get(file);
+  if (!u) { u = URL.createObjectURL(file); urlCache.set(file, u); }
+  return u;
+};
+const isVid = f => /\.(mp4|mov|m4v|webm)$/i.test(f);
+const isImg = f => /\.(jpe?g|png|gif|webp|heic)$/i.test(f);
+const isAud = f => /\.(m4a|aac|mp3|wav|ogg|opus)$/i.test(f);
+const linkify = s => esc(s).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+const title = s => String(s || '').replace(/\b\w/g, c => c.toUpperCase());
+const convById = id => D.conversations.find(c => c.id === id || c.user === id);
+const friendRec = u => { for (const g of Object.values(D.friends)) if (Array.isArray(g)) { const f = g.find(x => x.Username === u); if (f) return f; } return null; };
+let storyViews = [];
+const isDark = () => getComputedStyle(document.body).backgroundColor === 'rgb(18, 18, 18)';
+
+/* theme */
+const THEME_KEY = 'snapviewer-theme';
+try { const t = localStorage.getItem(THEME_KEY); if (t) document.documentElement.dataset.theme = t; } catch {}
+const toggleTheme = () => {
+  document.documentElement.dataset.theme = isDark() ? 'light' : 'dark';
+  try { localStorage.setItem(THEME_KEY, document.documentElement.dataset.theme); } catch {}
+  onTheme.forEach(f => f());
+};
+const onTheme = new Set();
+
+/* lazy media */
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    const el = e.target; io.unobserve(el);
+    el.src = el.dataset.src + (el.tagName === 'VIDEO' ? '#t=0.1' : '');
+  }
+}, { rootMargin: '600px' });
+const lazy = root => root.querySelectorAll('[data-src]:not([src])').forEach(el => io.observe(el));
+
+/* lightbox */
+let lbItems = [], lbIdx = 0;
+const lb = $('#lb');
+$('#lbX').innerHTML = I.x; $('#lbPrev').innerHTML = I.back; $('#lbNext').innerHTML = I.next;
+const openLb = (items, idx) => { if (!items.length) return; lbItems = items; lbIdx = idx; lb.classList.add('open'); drawLb(); };
+const closeLb = () => { lb.classList.remove('open'); $('#lbStage').innerHTML = ''; };
+const drawLb = () => {
+  const it = lbItems[lbIdx];
+  const main = isVid(it.src) ? `<video src="${it.src}" controls autoplay playsinline></video>` : `<img src="${it.src}" alt="">`;
+  $('#lbStage').innerHTML = main + (it.ov ? `<img class="ov" src="${it.ov}" alt="">` : '');
+  $('#lbInfo').innerHTML = `${esc(it.label || '')} · ${lbIdx + 1} of ${lbItems.length} · <a href="${it.src}" target="_blank">Open file</a>`;
+  $('#lbPrev').style.visibility = lbIdx > 0 ? '' : 'hidden';
+  $('#lbNext').style.visibility = lbIdx < lbItems.length - 1 ? '' : 'hidden';
+};
+const stepLb = d => { const n = lbIdx + d; if (n >= 0 && n < lbItems.length) { lbIdx = n; drawLb(); } };
+$('#lbX').onclick = closeLb; $('#lbPrev').onclick = () => stepLb(-1); $('#lbNext').onclick = () => stepLb(1);
+lb.onclick = e => { if (e.target === lb) closeLb(); };
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (lb.classList.contains('open')) closeLb(); else closeSheet(); }
+  if (!lb.classList.contains('open')) return;
+  if (e.key === 'ArrowLeft') stepLb(-1);
+  if (e.key === 'ArrowRight') stepLb(1);
+});
+const memItem = m => ({ ...m, src: fileUrl('memories', m.main), ov: m.overlay ? fileUrl('memories', m.overlay) : null,
+  label: new Date(m.d + 'T12:00').toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) });
+const memTile = (m, i, badge) => `<div class="tile" data-i="${i}">${isVid(m.main)
+  ? `<video muted playsinline preload="metadata" data-src="${m.src}"></video><div class="play"><span>${I.play}</span></div>`
+  : `<img data-src="${m.src}" alt="">`}${m.ov ? `<img class="ov" data-src="${m.ov}" alt="">` : ''}${badge ? `<span class="badge">${esc(badge)}</span>` : ''}</div>`;
+
+/* tooltip */
+const tip = $('#tip');
+const showTip = (e, head, rows) => {
+  tip.replaceChildren();
+  const h = document.createElement('div'); h.className = 't'; h.textContent = head; tip.append(h);
+  for (const [color, val, label] of rows) {
+    const r = document.createElement('div'); r.className = 'r';
+    if (color) { const i = document.createElement('i'); i.style.background = color; r.append(i); }
+    const b = document.createElement('b'); b.textContent = val; r.append(b);
+    if (label) { const s = document.createElement('span'); s.textContent = label; r.append(s); }
+    tip.append(r);
+  }
+  tip.style.display = 'block';
+  const rect = e.target.getBoundingClientRect ? e.target.getBoundingClientRect() : null;
+  const x = e.clientX ?? (rect.left + rect.width / 2), y = e.clientY ?? rect.top;
+  const w = tip.offsetWidth, hgt = tip.offsetHeight;
+  tip.style.left = Math.min(innerWidth - w - 8, Math.max(8, x + 14)) + 'px';
+  tip.style.top = Math.max(8, y - hgt - 12) + 'px';
+};
+const hideTip = () => { tip.style.display = 'none'; };
+
+/* ---------- charts ---------- */
+const niceMax = v => { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)); const n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; };
+const kfmt = v => v >= 1e4 ? Math.round(v / 1e3) + 'k' : v >= 1e3 ? (v / 1e3).toFixed(1).replace('.0', '') + 'k' : String(v);
+const legend = series => series.length < 2 ? '' : `<div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')}</div>`;
+const dataTable = (cats, series) => `<details class="dt"><summary>View as table</summary><table><tr><th></th>${series.map(s => `<th>${esc(s.name)}</th>`).join('')}</tr>
+  ${cats.map((c, i) => `<tr><td>${esc(c)}</td>${series.map(s => `<td>${fmtN(s.values[i])}</td>`).join('')}</tr>`).join('')}</table></details>`;
+// Stacked column chart. series[0] sits on the baseline; each segment is separated by a 2px surface gap.
+function columns(el, { cats, series, height = 200, tipHead = c => c, every }) {
+  el.innerHTML = legend(series) + '<div class="chart"></div>' + dataTable(cats, series);
+  const box = $('.chart', el);
+  const draw = () => {
+    const W = Math.max(260, box.clientWidth), H = height, L = 36, B = 22, T = 8, pw = W - L - 4, ph = H - B - T;
+    const totals = cats.map((_, i) => series.reduce((a, s) => a + s.values[i], 0));
+    const max = niceMax(Math.max(...totals, 1));
+    const band = pw / cats.length, bw = Math.max(2, Math.min(band * .72, 34)), step = every || Math.ceil(cats.length / Math.floor(pw / 44));
+    let svg = `<svg width="${W}" height="${H}" role="img">`;
+    for (const f of [0, .5, 1]) {
+      const y = T + ph - ph * f;
+      svg += `<line x1="${L}" x2="${W - 4}" y1="${y}" y2="${y}" stroke="var(--grid)"/><text x="${L - 6}" y="${y + 4}" text-anchor="end">${kfmt(max * f)}</text>`;
+    }
+    cats.forEach((c, i) => {
+      const x = L + band * i + (band - bw) / 2;
+      let y = T + ph;
+      const segs = series.map(s => s.values[i]).map((v, k) => ({ v, k })).filter(s => s.v > 0);
+      segs.forEach((s, j) => {
+        const h = Math.max(1, ph * s.v / max - (j > 0 ? 2 : 0));
+        const top = y - h - (j > 0 ? 2 : 0);
+        const r = j === segs.length - 1 ? Math.min(4, bw / 2, h) : 0;
+        svg += `<path fill="${series[s.k].color}" d="M${x},${top + h}V${top + r}Q${x},${top} ${x + r},${top}H${x + bw - r}Q${x + bw},${top} ${x + bw},${top + r}V${top + h}Z"/>`;
+        y = top;
+      });
+      if (i % step === 0) svg += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${esc(c)}</text>`;
+      svg += `<rect class="hit" data-i="${i}" tabindex="0" x="${L + band * i}" y="${T}" width="${band}" height="${ph}" aria-label="${esc(c)}: ${series.map(s => s.name + ' ' + s.values[i]).join(', ')}"/>`;
+    });
+    box.innerHTML = svg + '</svg>';
+  };
+  draw();
+  const show = e => { const i = e.target.dataset?.i; if (i == null) return;
+    showTip(e, tipHead(cats[i]), series.map(s => [s.color, fmtN(s.values[i]), s.name])); };
+  box.addEventListener('pointermove', show); box.addEventListener('focusin', show);
+  box.addEventListener('pointerleave', hideTip); box.addEventListener('focusout', hideTip);
+  new ResizeObserver(() => draw()).observe(box);
+}
+const hbars = (rows, { fmt = fmtN, onClick } = {}) => {
+  const max = Math.max(...rows.map(r => r.v), 1);
+  return `<div class="hbars">${rows.map((r, i) => `<div class="lbl">${onClick ? `<button data-i="${i}">${esc(r.label)}</button>` : esc(r.label)}</div>
+    <div class="track"><div class="fill" style="width:${(r.v / max * 100).toFixed(1)}%"></div></div><div class="val">${fmt(r.v)}</div>`).join('')}</div>`;
+};
+
+/* ---------- nav ---------- */
+const VIEWS = [['map', 'Map', I.map], ['chats', 'Chats', I.chat], ['stories', 'Stories', I.stories], ['memories', 'Memories', I.mem],
+  ['recap', 'Recap', I.recap], ['friends', 'Friends', I.friends], ['profile', 'Profile', I.me]];
+let view = 'chats';
+const drawRail = () => {
+  $('#rail').innerHTML = `<div class="logo">${I.ghost}</div>` +
+    VIEWS.map(([k, label, icon]) => `<button data-v="${k}" class="${view === k ? 'on' : ''}" aria-label="${label}">${icon}<span class="tip">${label}</span></button>`).join('') +
+    `<div class="spacer"></div><button data-open-other aria-label="Open another export">${I.folder}<span class="tip">Open another export</span></button><button data-theme-toggle aria-label="Toggle theme">${I.theme}<span class="tip">Light / dark</span></button>`;
+};
+$('#rail').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.hasAttribute('data-theme-toggle')) return toggleTheme();
+  if (b.hasAttribute('data-open-other')) return location.reload();
+  go(b.dataset.v);
+};
+const go = (v, arg) => {
+  view = v; drawRail(); closeSheet(); hideTip(); onTheme.clear(); $('#app').classList.remove('chat-open');
+  ({ map: drawMap, chats: drawChats, stories: drawStories, memories: drawMemories, recap: drawRecap, friends: drawFriends, profile: drawProfile })[v](arg);
+};
+
+/* ---------- friend profile sheet ---------- */
+const stats = c => {
+  if (c._s) return c._s;
+  let sent = 0, recv = 0, media = 0, snaps = 0;
+  const days = new Map(), years = {};
+  for (const m of c.msgs) {
+    const mine = m.f === D.me;
+    if (m.k.startsWith('SNAP_')) snaps++;
+    else { mine ? sent++ : recv++; if (m.m.length || m.x) media++; }
+    const dn = dayNum(m.t);
+    days.set(dn, (days.get(dn) || 0) | (mine ? 1 : 2));
+    const y = new Date(m.t).getFullYear();
+    (years[y] ??= [0, 0])[mine ? 0 : 1]++;
+  }
+  // a streak day is one where both sides sent something, like Snapchat's own streaks
+  const both = [...days].filter(([, v]) => v === 3).map(([k]) => k).sort((a, b) => a - b);
+  let streak = 0, run = 0, prev = null;
+  for (const k of both) { run = prev !== null && k === prev + 1 ? run + 1 : 1; streak = Math.max(streak, run); prev = k; }
+  return c._s = { sent, recv, media, snaps, activeDays: days.size, streak, years, first: c.msgs[0]?.t, last: c.msgs.at(-1)?.t };
+};
+const sheetBg = $('#sheetBg');
+function closeSheet() { sheetBg.classList.remove('open'); }
+sheetBg.onclick = e => { if (e.target === sheetBg) closeSheet(); };
+function openFriend(key) {
+  const c = convById(key);
+  const user = c?.user || (c ? null : key);
+  const f = user ? friendRec(user) : null;
+  const name = c?.name || f?.['Display Name'] || nameOf(key);
+  const since = pd(f?.['Creation Timestamp']);
+  const s = c ? stats(c) : null;
+  const watched = user ? storyViews.filter(v => v.View === user).length : 0;
+  const total = s ? s.sent + s.recv : 0;
+  const badges = [];
+  if (s?.streak > 1) badges.push(`🔥 ${s.streak}-day streak record`);
+  if (c) { const rank = [...D.conversations].sort((a, b) => b.msgs.length - a.msgs.length).indexOf(c); if (rank < 8) badges.push(rank === 0 ? '💛 Most messaged' : `😎 Top ${rank + 1} chat`); }
+  if (since) badges.push(`🤝 Friends since ${fmtD(since, { month: 'short', year: 'numeric' })}`);
+  if (watched) badges.push(`👀 ${watched} of their Snaps watched`);
+  $('#sheet').innerHTML = `<button class="x" id="sheetX" aria-label="Close">${I.x}</button>
+    <div class="head">${avatar(name, 96)}<h2>${esc(name)}</h2>
+      <div class="muted">${c?.group ? `Group · ${c.members.length} members` : '@' + esc(user || key)}${f?.Source ? ' · ' + esc(f.Source) : ''}</div></div>
+    <div class="badges">${badges.map(b => `<span>${esc(b)}</span>`).join('')}</div>
+    ${s ? `<div class="stats">
+      <div class="stat"><b>${fmtN(total)}</b><span class="muted">messages</span></div>
+      <div class="stat"><b>${total ? Math.round(s.sent / total * 100) : 0}%</b><span class="muted">sent by you</span></div>
+      <div class="stat"><b>${fmtN(s.activeDays)}</b><span class="muted">days chatting</span></div>
+      <div class="stat"><b>${fmtN(s.media)}</b><span class="muted">photos & videos</span></div>
+      <div class="stat"><b>${s.streak}</b><span class="muted">longest streak</span></div>
+      <div class="stat"><b>${fmtN(s.snaps)}</b><span class="muted">Snaps logged</span></div>
+    </div>
+    <div class="chart-card" style="margin-top:12px;padding:14px"><h3>Messages by year</h3><div class="desc">First chat ${fmtD(s.first)} · last ${fmtD(s.last)}</div><div id="fChart"></div></div>
+    ${c.group ? `<h2 style="font-size:15px;margin:18px 0 8px">Members</h2><div class="chips">${c.members.map(u => `<span class="chip">${esc(u === D.me ? 'You' : nameOf(u))}</span>`).join('')}</div>` : ''}
+    <button class="cta" id="sheetChat">Open chat</button>` : '<p class="muted" style="text-align:center">No chat history with this account in your export.</p>'}`;
+  sheetBg.classList.add('open');
+  $('#sheetX').onclick = closeSheet;
+  if (s) {
+    const ys = Object.keys(s.years).sort();
+    columns($('#fChart'), { cats: ys, height: 150, series: [
+      { name: 'You', color: 'var(--c-me)', values: ys.map(y => s.years[y][0]) },
+      { name: c.group ? 'Others' : name, color: 'var(--c-them)', values: ys.map(y => s.years[y][1]) }] });
+    $('#sheetChat').onclick = () => go('chats', c.id);
+  }
+}
+
+/* ---------- chats ---------- */
+const SNAP_COLOR = k => k === 'SNAP_VIDEO' ? 'var(--video)' : 'var(--me)';
+const convStatus = c => {
+  const m = c.msgs[c.msgs.length - 1];
+  if (!m) return '';
+  const mine = m.f === D.me;
+  let icon, text;
+  if (m.k.startsWith('SNAP_')) {
+    icon = `<span class="sq${mine ? ' hollow' : ''}" style="background:${SNAP_COLOR(m.k)};border-color:${SNAP_COLOR(m.k)}"></span>`;
+    text = mine ? 'Delivered' : 'Received';
+  } else {
+    icon = `<span class="sq${mine ? ' hollow' : ''}" style="background:var(--them);border-color:var(--them);border-radius:3px 3px 3px 0"></span>`;
+    const who = c.group && !mine ? nameOf(m.f) + ': ' : mine ? 'You: ' : '';
+    text = m.c ? who + m.c : m.k === 'MEDIA' ? (mine ? 'Sent a Chat' : 'Received a Chat') : mine ? 'Sent' : 'Received';
+  }
+  const st = stats(c);
+  const fire = st.streak >= 3 && Date.now() - c.last < 2 * 864e5 ? ' 🔥' : '';
+  return `${icon}<span class="preview">${esc(text)}</span><span>· ${ago(m.t)}${fire}</span>`;
+};
+let current = null, filterQ = '';
+function drawChats(openId) {
+  $('#body').innerHTML = `
+    <section class="list">
+      <div class="list-head"><h1>Chats</h1>
+        <label class="search">${I.search}<input id="cq" placeholder="Search" value="${esc(filterQ)}"></label></div>
+      <div class="convs" id="convs"></div>
+    </section>
+    <section class="main chat-main" id="chatMain"><div class="empty"><div><div class="ghost">${I.ghost}</div>
+      <b>Select a chat</b><div class="muted">${D.conversations.length} conversations · ${fmtN(D.conversations.reduce((a, c) => a + c.msgs.length, 0))} messages</div></div></div></section>`;
+  const drawList = () => {
+    const q = filterQ.toLowerCase();
+    $('#convs').innerHTML = D.conversations
+      .filter(c => !q || c.name.toLowerCase().includes(q) || (c.user || '').toLowerCase().includes(q))
+      .map(c => `<button class="conv${current === c.id ? ' on' : ''}" data-id="${esc(c.id)}">${avatar(c.name)}
+        <div class="meta"><div class="name">${esc(c.name)}</div><div class="status">${convStatus(c)}</div></div></button>`).join('')
+      || '<div class="empty" style="padding:40px 0">No chats match</div>';
+  };
+  drawList();
+  $('#cq').oninput = e => { filterQ = e.target.value; drawList(); };
+  $('#convs').onclick = e => { const b = e.target.closest('.conv'); if (b) openChat(b.dataset.id); };
+  if (openId) openChat(convById(openId)?.id);
+}
+
+const PAGE = 400;
+function openChat(id) {
+  const c = D.conversations.find(x => x.id === id); if (!c) return;
+  current = id;
+  document.querySelectorAll('.conv').forEach(b => b.classList.toggle('on', b.dataset.id === id));
+  $('#app').classList.add('chat-open');
+  const others = c.members.filter(u => u !== D.me);
+  const palette = ['var(--them)', '#9b59ff', '#20b26b', '#ff8a00', '#e84393', '#00b3a4', '#c0a000'];
+  const colorOf = u => u === D.me ? 'var(--me)' : c.group ? palette[others.indexOf(u) % palette.length] : 'var(--them)';
+  const first = c.msgs[0], sub = c.group ? `${others.length + 1} members` : '@' + c.user;
+  $('#chatMain').innerHTML = `
+    <header class="chat-head"><button class="back" id="back" aria-label="Back">${I.back}</button>
+      <button class="who-btn" id="whoBtn" title="View profile">${avatar(c.name, 40)}
+      <div class="title"><b>${esc(c.name)}</b><span>${esc(sub)} · ${fmtN(c.msgs.length)} messages${first ? ' since ' + new Date(first.t).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : ''}</span></div></button>
+      <label class="search">${I.search}<input id="mq" placeholder="Search in chat"></label></header>
+    <div class="msgs" id="msgs"><div class="msgs-inner" id="msgsInner"></div></div>`;
+  $('#back').onclick = () => $('#app').classList.remove('chat-open');
+  $('#whoBtn').onclick = () => openFriend(c.id);
+
+  let q = '', list = c.msgs, shown = 0;
+  const mediaItems = [];
+  const body = (m, qre) => {
+    const mine = m.f === D.me;
+    if (m.k.startsWith('SNAP_')) {
+      const col = SNAP_COLOR(m.k);
+      return `<span class="pill"><span class="sq${mine ? ' hollow' : ''}" style="background:${col};border-color:${col}"></span>${mine ? 'Sent' : 'Received'} a ${m.k === 'SNAP_VIDEO' ? 'video' : 'photo'} Snap</span>`;
+    }
+    if (m.k === 'STATUSERASEDMESSAGE') return '<span class="pill italic">Message deleted</span>';
+    let html = '';
+    if (m.m.length) {
+      // "b~G…" files are the caption/drawing layer of the other media in the same message
+      const isOv = f => /^[\d-]+_b~G/.test(f);
+      const mains = m.m.filter(f => !isOv(f));
+      const ovs = mains.length ? m.m.filter(isOv) : [];
+      html += '<div class="media-row">' + (mains.length ? mains : m.m).map((f, n) => {
+        const src = fileUrl('chat_media', f);
+        if (isAud(f) || (m.k === 'NOTE' && !isImg(f))) return `<audio controls preload="none" src="${src}"></audio>`;
+        if (!isVid(f) && !isImg(f)) return '';
+        const ov = ovs[n] ? fileUrl('chat_media', ovs[n]) : null;
+        const i = mediaItems.push({ src, ov, label: `${nameOf(m.f)} · ${new Date(m.t).toLocaleString()}` }) - 1;
+        return `<div class="thumb" data-i="${i}">${isVid(f)
+          ? `<video muted playsinline preload="metadata" data-src="${src}"></video><div class="play"><span>${I.play}</span></div>`
+          : `<img loading="lazy" data-src="${src}" alt="">`}${ov ? `<img class="ov" data-src="${ov}" alt="">` : ''}</div>`;
+      }).join('') + '</div>';
+    } else if (m.x || (m.k === 'MEDIA' && !m.c)) {
+      html += `<span class="pill italic">${m.k === 'NOTE' ? 'Voice note' : 'Photo or video'} not included in export</span>`;
+    } else if (m.k === 'STICKER') html += '<span class="pill italic">Sticker</span>';
+    else if (m.k === 'SHARE') html += '<span class="pill italic">Shared a story or link</span>';
+    else if (!m.c) html += `<span class="pill italic">${m.s ? 'Empty message' : 'Chat not saved'}</span>`;
+    if (m.c) {
+      let t = linkify(m.c);
+      if (qre) t = t.replace(qre, '<mark>$1</mark>');
+      html += m.m.length ? `<div class="cap">${t}</div>` : t;
+    }
+    return html;
+  };
+  const render = (msgs, qre) => {
+    let out = '', lastDay = null, lastFrom = null;
+    for (const m of msgs) {
+      const d = dayKey(m.t);
+      if (d !== lastDay) { out += (lastFrom !== null ? '</div>' : '') + `<div class="day">${dayLabel(m.t)}</div>`; lastDay = d; lastFrom = null; }
+      if (m.f !== lastFrom) {
+        const col = colorOf(m.f);
+        out += (lastFrom !== null ? '</div>' : '') + `<div class="grp"><div class="who" style="color:${col}">${m.f === D.me ? 'Me' : esc(nameOf(m.f))}</div>`;
+        lastFrom = m.f;
+      }
+      out += `<div class="line" style="border-color:${colorOf(m.f)}">${body(m, qre)}<time>${timeOf(m.t)}</time></div>`;
+    }
+    return out + (lastFrom !== null ? '</div>' : '');
+  };
+  const inner = $('#msgsInner'), box = $('#msgs');
+  const draw = (keepBottom) => {
+    mediaItems.length = 0;
+    const start = Math.max(0, list.length - shown);
+    const qre = q ? new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?![^<]*>)', 'gi') : null;
+    const prevH = box.scrollHeight, prevTop = box.scrollTop;
+    inner.innerHTML = (start > 0 ? `<button class="more" id="more">Load earlier messages (${fmtN(start)} more)</button>` : '')
+      + (list.length ? render(list.slice(start), qre) : `<div class="empty" style="padding:60px 0">${q ? 'No messages match' : 'No messages'}</div>`);
+    lazy(inner);
+    if (keepBottom) box.scrollTop = box.scrollHeight;
+    else box.scrollTop = box.scrollHeight - prevH + prevTop;
+    const more = $('#more'); if (more) more.onclick = () => { shown += PAGE; draw(false); };
+  };
+  shown = PAGE; draw(true);
+  box.addEventListener('scroll', () => { if (box.scrollTop < 40 && shown < list.length) { shown += PAGE; draw(false); } });
+  inner.onclick = e => { const t = e.target.closest('.thumb'); if (t) openLb(mediaItems, +t.dataset.i); };
+  let timer;
+  $('#mq').oninput = e => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      q = e.target.value.trim();
+      const ql = q.toLowerCase();
+      list = q ? c.msgs.filter(m => m.c.toLowerCase().includes(ql)) : c.msgs;
+      shown = PAGE; draw(true);
+    }, 150);
+  };
+}
+
+/* ---------- map ---------- */
+let leafletP;
+const loadLeaflet = () => leafletP ??= new Promise((res, rej) => {
+  const base = 'https://cdnjs.cloudflare.com/ajax/libs/';
+  for (const h of ['leaflet/1.9.4/leaflet.min.css', 'leaflet.markercluster/1.5.3/MarkerCluster.css']) {
+    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = base + h; document.head.append(l);
+  }
+  const s1 = document.createElement('script'); s1.src = base + 'leaflet/1.9.4/leaflet.min.js';
+  s1.onload = () => { const s2 = document.createElement('script'); s2.src = base + 'leaflet.markercluster/1.5.3/leaflet.markercluster.js'; s2.onload = res; s2.onerror = rej; document.head.append(s2); };
+  s1.onerror = rej; document.head.append(s1);
+}).catch(e => { leafletP = null; throw e; });
+const parseLatLng = s => { const m = /lat\s*(-?[\d.]+).*?long\s*(-?[\d.]+)/.exec(s || ''); return m ? [+m[1], +m[2]] : null; };
+const utcDay = t => new Date(t).toISOString().slice(0, 10);
+let mapYear = '', mapLayers = { mem: true, hist: true, home: true };
+function drawMap() {
+  const loc = D.location || {};
+  const years = [...new Set(D.memPlaces.map(p => new Date(p[0]).getFullYear()))].sort((a, b) => b - a);
+  const places = D.places || [];
+  const visited = loc['Businesses and places you may have visited']?.inferredVisitationList || [];
+  const biz = loc['Businesses and places you may have visited']?.businessList || [];
+  const areas = {};
+  for (const a of loc['Areas you may have visited in the last two years'] || []) { const k = title(a.City) + (a.Region ? ', ' + a.Region : ''); areas[k] = (areas[k] || 0) + 1; }
+  const topAreas = Object.entries(areas).sort((a, b) => b[1] - a[1]).slice(0, 12);
+  const hist = loc['Location History'] || [];
+  $('#body').innerHTML = `<section class="mapwrap">
+    <aside class="mappanel">
+      <h1>Snap Map</h1><p class="sub">${fmtN(D.memPlaces.length)} memories with a location · ${fmtN(hist.length)} location pings</p>
+      <div class="chips" id="mapChips">
+        <button data-l="mem" class="${mapLayers.mem ? 'on' : ''}">Memories</button>
+        <button data-l="hist" class="${mapLayers.hist ? 'on' : ''}">Where you've been</button>
+        <button data-l="home" class="${mapLayers.home ? 'on' : ''}">Home & work</button>
+        <select id="mapYear" aria-label="Year"><option value="">All years</option>${years.map(y => `<option${String(y) === mapYear ? ' selected' : ''}>${y}</option>`).join('')}</select>
+      </div>
+      ${places.length ? `<h2>Places you posted from</h2><div class="rows">${places.map(p => `<div class="row"><div class="ico">📍</div><div class="meta"><div>${esc(p.Place)}</div>
+        <div class="muted">${esc(p['Place Location'])} · ${fmtD(pd(p.Date))}${p['Share Type'] ? ' · ' + esc(p['Share Type']) : ''}</div></div></div>`).join('')}</div>` : ''}
+      ${topAreas.length ? `<h2>Areas you've been, last two years</h2>${hbars(topAreas.map(([k, v]) => ({ label: k, v })), { fmt: v => v + '×' })}` : ''}
+      ${biz.length ? `<h2>Businesses you may have visited</h2><div class="rows">${biz.map(([d, n]) => `<div class="row"><div class="ico">🏪</div><div class="meta"><div>${esc(n)}</div><div class="muted">${fmtD(pd(d))}</div></div></div>`).join('')}</div>` : ''}
+      ${visited.length ? `<h2>Places Snapchat thinks you visited</h2><div class="chips">${visited.map(([n, c]) => `<span class="chip">${esc(n)}${c ? ` <span class="muted">· ${esc(c)}</span>` : ''}</span>`).join('')}</div>` : ''}
+    </aside>
+    <div id="map"><div class="map-note">Loading map…</div></div></section>`;
+  $('#mapChips').onclick = e => { const b = e.target.closest('button'); if (b) { mapLayers[b.dataset.l] = !mapLayers[b.dataset.l]; drawMap(); } };
+  $('#mapYear').onchange = e => { mapYear = e.target.value; drawMap(); };
+
+  loadLeaflet().then(() => {
+    if (!document.getElementById('map')) return;
+    $('#map').innerHTML = '';
+    const map = L.map('map', { zoomControl: true, worldCopyJump: true });
+    const esri = (p, o = {}) => L.tileLayer(`https://server.arcgisonline.com/ArcGIS/rest/services/${p}/MapServer/tile/{z}/{y}/{x}`,
+      { maxZoom: 19, attribution: 'Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors', ...o });
+    const tiles = () => isDark()
+      ? L.layerGroup([esri('Canvas/World_Dark_Gray_Base', { maxNativeZoom: 16 }), esri('Canvas/World_Dark_Gray_Reference', { maxNativeZoom: 16 })])
+      : esri('World_Street_Map');
+    let tl = tiles().addTo(map);
+    onTheme.add(() => { map.removeLayer(tl); tl = tiles().addTo(map); });
+    const bounds = [];
+    if (mapLayers.mem) {
+      const cl = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 50,
+        iconCreateFunction: g => { const n = g.getChildCount(), s = n < 10 ? 32 : n < 100 ? 40 : n < 1000 ? 48 : 56;
+          return L.divIcon({ html: `<div class="mc">${n < 1000 ? n : Math.round(n / 100) / 10 + 'k'}</div>`, className: '', iconSize: [s, s] }); } });
+      const dot = L.divIcon({ html: '<div class="md"></div>', className: '', iconSize: [14, 14] });
+      for (const [t, k, lat, lng] of D.memPlaces) {
+        if (mapYear && new Date(t).getFullYear() !== +mapYear) continue;
+        const mk = L.marker([lat, lng], { icon: dot });
+        mk.bindPopup(() => {
+          const day = utcDay(t), n = D.memories.filter(m => m.d === day).length;
+          return `<b>${k === 'V' ? '🎥 Video' : '📷 Photo'}</b><br><span class="muted">${esc(fmtDT(t))}</span>${n ? `<br><button data-day="${day}">View ${n} memor${n === 1 ? 'y' : 'ies'} from this day</button>` : ''}`;
+        });
+        cl.addLayer(mk); bounds.push([lat, lng]);
+      }
+      map.addLayer(cl);
+    }
+    if (mapLayers.hist) {
+      for (const [ts, ll] of hist) {
+        const p = (ll || '').split(',').map(Number); if (p.length !== 2 || p.some(isNaN)) continue;
+        L.circleMarker(p, { radius: 5, color: '#fff', weight: 2, fillColor: '#0eadff', fillOpacity: 1 }).bindPopup(`<b>You were here</b><br><span class="muted">${esc(fmtDT(pd(ts)))}</span>`).addTo(map);
+        if (!mapLayers.mem) bounds.push(p);
+      }
+    }
+    if (mapLayers.home) {
+      const hw = loc['Home, School & Work'] || {};
+      for (const [k, lbl, ic] of [['inferredHome', 'Home', '🏠'], ['inferredWork', 'Work', '💼'], ['userProvidedHome', 'Home', '🏠'], ['userProvidedWork', 'Work', '💼']]) {
+        const p = parseLatLng(hw[k]); if (!p) continue;
+        L.marker(p, { icon: L.divIcon({ html: `<div class="pin">${ic} ${lbl}</div>`, className: '', iconSize: null, iconAnchor: [30, 14] }), zIndexOffset: -1000 })
+          .bindPopup(`<b>${lbl}</b><br><span class="muted">${k.startsWith('inferred') ? 'Inferred by Snapchat' : 'Set by you'}</span>`).addTo(map);
+        if (!bounds.length) bounds.push(p);
+      }
+    }
+    if (bounds.length) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 }); else map.setView([51.5, -0.1], 10);
+    map.on('popupopen', e => {
+      const b = e.popup.getElement().querySelector('[data-day]');
+      if (b) b.onclick = () => openLb(D.memories.filter(m => m.d === b.dataset.day).map(memItem), 0);
+    });
+    setTimeout(() => map.invalidateSize(), 50);
+  }).catch(() => {
+    if (document.getElementById('map')) $('#map').innerHTML = '<div class="map-note">The map needs an internet connection to load. Everything else works offline.</div>';
+  });
+}
+
+/* ---------- stories ---------- */
+function drawStories() {
+  const counts = {};
+  for (const v of storyViews) if (v.View) counts[v.View] = (counts[v.View] || 0) + 1;
+  const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const mine = (D.stories['Your Story Views'] || []).map(s => ({ t: pd(s['Story Date']), v: +s['Story Views'] || 0, r: +s['Story Replies'] || 0 })).filter(s => s.t).sort((a, b) => a.t - b.t);
+  const eng = Object.fromEntries((D.profile.Engagement || []).map(e => [e.Event, e.Occurrences]));
+  const spot = [...new Set((D.ranking.Spotlight || []).flatMap(o => typeof o === 'object' ? Object.keys(o) : [o]))];
+  const recent = [...storyViews].map(v => ({ ...v, t: pd(v['View Date']) })).filter(v => v.t).sort((a, b) => b.t - a.t).slice(0, 15);
+  $('#body').innerHTML = `<section class="page"><div class="page-inner" style="max-width:960px">
+    <h1>Stories</h1><p class="sub">You watched ${fmtN(storyViews.length)} story Snaps from ${fmtN(ranked.length)} accounts</p>
+    <div class="rings" id="rings">${ranked.map(([u, n]) => `<button class="ring" data-u="${esc(u)}"><div class="rg">${avatar(nameOf(u), 60)}</div>
+      <span class="nm">${esc(nameOf(u))}</span><span class="muted" style="font-size:11px">${n} viewed</span></button>`).join('')}</div>
+    <h2>Your Story</h2>
+    <div class="stats">
+      <div class="stat"><b>${fmtN(mine.length)}</b><span class="muted">story posts</span></div>
+      <div class="stat"><b>${fmtN(mine.reduce((a, s) => a + s.v, 0))}</b><span class="muted">views</span></div>
+      <div class="stat"><b>${fmtN(mine.reduce((a, s) => a + s.r, 0))}</b><span class="muted">replies</span></div>
+      ${eng['Snaps Posted to Story'] != null ? `<div class="stat"><b>${fmtN(eng['Snaps Posted to Story'])}</b><span class="muted">Snaps posted (recent)</span></div>` : ''}
+      ${eng['Snaps Viewed in a Story'] != null ? `<div class="stat"><b>${fmtN(eng['Snaps Viewed in a Story'])}</b><span class="muted">Snaps viewed (recent)</span></div>` : ''}
+    </div>
+    ${mine.length ? `<div class="chart-card" style="margin-top:12px"><h3>Views on your story</h3><div class="desc">Each bar is a posting slot Snapchat recorded</div><div id="myStory"></div></div>` : ''}
+    <div class="two">
+      <div><h2>Recently watched</h2><div class="rows">${recent.map(v => `<button class="row" data-u="${esc(v.View)}">${avatar(nameOf(v.View), 36)}<div class="meta"><div>${esc(nameOf(v.View))}</div>
+        <div class="muted">${esc(title((v['Media Type'] || 'story').toLowerCase()))} · ${esc(fmtDT(v.t))}</div></div></button>`).join('') || '<div class="row muted">None</div>'}</div></div>
+      <div><h2>Places you posted from</h2><div class="rows">${(D.places || []).slice(0, 15).map(p => `<div class="row"><div class="ico">📍</div><div class="meta"><div>${esc(p.Place)}</div>
+        <div class="muted">${esc(p['Place Location'])} · ${fmtD(pd(p.Date))}</div></div></div>`).join('') || '<div class="row muted">None</div>'}</div></div>
+    </div>
+    ${spot.length ? `<h2>Spotlight topics you've engaged with</h2><div class="chips">${spot.map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div>` : ''}
+  </div></section>`;
+  const open = e => { const b = e.target.closest('[data-u]'); if (b) openFriend(b.dataset.u); };
+  $('#rings').onclick = open; $('.two').onclick = open;
+  if (mine.length) columns($('#myStory'), { height: 170, cats: mine.map(s => fmtD(s.t, { day: 'numeric', month: 'short' })),
+    tipHead: c => c, series: [{ name: 'Views', color: 'var(--c-them)', values: mine.map(s => s.v) }] });
+}
+
+/* ---------- recap ---------- */
+let recapYear = '';
+const EMOJI = /\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic}|[\u{1F3FB}-\u{1F3FF}])*/gu;
+function drawRecap() {
+  const allYears = [...new Set(D.conversations.flatMap(c => c.msgs.length ? [new Date(c.msgs[0].t).getFullYear(), new Date(c.last).getFullYear()] : []))];
+  const [y0, y1] = [Math.min(...allYears), Math.max(...allYears)];
+  const years = []; for (let y = y1; y >= y0; y--) years.push(y);
+  const Y = recapYear ? +recapYear : null;
+  let sent = 0, recv = 0, snapsS = 0, snapsR = 0, media = 0;
+  const bucket = {}, heat = Array.from({ length: 7 }, () => Array(24).fill(0)), per = new Map(), emo = {}, days = new Set();
+  for (const c of D.conversations) for (const m of c.msgs) {
+    const d = new Date(m.t);
+    if (Y && d.getFullYear() !== Y) continue;
+    const mine = m.f === D.me;
+    if (m.k.startsWith('SNAP_')) { mine ? snapsS++ : snapsR++; continue; }
+    mine ? sent++ : recv++;
+    if (m.m.length || m.x) media++;
+    const b = Y ? d.getMonth() : d.getFullYear();
+    (bucket[b] ??= [0, 0])[mine ? 0 : 1]++;
+    heat[(d.getDay() + 6) % 7][d.getHours()]++;
+    per.set(c, (per.get(c) || 0) + 1);
+    days.add(dayNum(m.t));
+    if (mine && m.c) for (const e of m.c.match(EMOJI) || []) emo[e] = (emo[e] || 0) + 1;
+  }
+  const dl = [...days].sort((a, b) => a - b); let run = 0, best = 0;
+  dl.forEach((d, i) => { run = i && d === dl[i - 1] + 1 ? run + 1 : 1; best = Math.max(best, run); });
+  const cats = Y ? Array.from({ length: 12 }, (_, i) => i) : years.slice().reverse();
+  const catLabel = k => Y ? new Date(2000, k, 1).toLocaleDateString(undefined, { month: 'short' }) : String(k);
+  const top = [...per].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const emoji = Object.entries(emo).sort((a, b) => b[1] - a[1]).slice(0, 16);
+  const spent = (D.profile['Breakdown of Time Spent on App'] || []).map(s => { const m = /^(.*?):\s*([\d.]+)%/.exec(s); return m && { label: m[1], v: +m[2] }; }).filter(Boolean).sort((a, b) => b.v - a.v);
+  const eng = (D.profile.Engagement || []).filter(e => +e.Occurrences > 0).sort((a, b) => b.Occurrences - a.Occurrences);
+  const interests = D.profile['Interest Categories'] || [], content = D.profile['Content Categories'] || [], ads = D.profile['Ads You Interacted With'] || [];
+  const hmax = Math.max(...heat.flat(), 1);
+  const busiest = (() => { let bi = 0, bh = 0, bv = -1; heat.forEach((r, i) => r.forEach((v, h) => { if (v > bv) { bv = v; bi = i; bh = h; } })); return { d: bi, h: bh }; })();
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const hourLbl = h => new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const FULLDAYS = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
+  $('#body').innerHTML = `<section class="page"><div class="page-inner" style="max-width:980px">
+    <h1>Recap</h1><p class="sub">${Y ? `Your ${Y} on Snapchat` : `${y1 - y0 + 1} years of Snapchat, ${y0}–${y1}`}</p>
+    <div class="chips" id="recapYears"><button data-y="" class="${!Y ? 'on' : ''}">All time</button>${years.map(y => `<button data-y="${y}" class="${Y === y ? 'on' : ''}">${y}</button>`).join('')}</div>
+    <div class="stats">
+      <div class="stat"><b>${fmtN(sent + recv)}</b><span class="muted">messages</span></div>
+      <div class="stat"><b>${fmtN(sent)}</b><span class="muted">sent by you</span></div>
+      <div class="stat"><b>${fmtN(media)}</b><span class="muted">photos & videos in chat</span></div>
+      <div class="stat"><b>${fmtN(per.size)}</b><span class="muted">people & groups</span></div>
+      <div class="stat"><b>${fmtN(days.size)}</b><span class="muted">days you chatted</span></div>
+      <div class="stat"><b>${best}</b><span class="muted">longest daily run</span></div>
+    </div>
+    <div class="chart-card" style="margin-top:16px"><h3>Messages ${Y ? 'by month' : 'by year'}</h3><div class="desc">Sent by you vs received</div><div id="cVol"></div></div>
+    <div class="chart-card" style="margin-top:16px"><h3>When you chat</h3><div class="desc">Busiest: ${FULLDAYS[busiest.d]} around ${hourLbl(busiest.h)} · darker = more messages</div>
+      <div class="heat" id="heat"><div class="lab"></div>${Array.from({ length: 24 }, (_, h) => `<div class="hx">${h % 6 === 0 ? hourLbl(h) : ''}</div>`).join('')}
+      ${heat.map((r, i) => `<div class="lab">${DAYS[i]}</div>` + r.map((v, h) => `<div class="cell" tabindex="0" data-d="${i}" data-h="${h}" style="background:${v ? `color-mix(in oklab, var(--c-them) ${Math.round(12 + 88 * Math.ceil(v / hmax * 5) / 5)}%, var(--panel2))` : 'var(--panel2)'}"></div>`).join('')).join('')}</div></div>
+    <div class="two">
+      <div><h2>Top chats</h2>${top.length ? hbars(top.map(([c, v]) => ({ label: c.name, v, id: c.id })), { onClick: true }) : '<p class="muted">No chats</p>'}</div>
+      <div><h2>Your most-sent emoji</h2>${emoji.length ? `<div class="emoji-grid">${emoji.map(([e, n]) => `<div><b>${e}</b><span class="muted">${fmtN(n)}</span></div>`).join('')}</div>` : '<p class="muted">No emoji</p>'}</div>
+    </div>
+    <p class="muted" style="margin-top:28px">The sections below come from Snapchat's own profile of you and cover recent activity, not the year filter.</p>
+    <div class="two">
+      <div>${spent.length ? `<h2>Where your time in the app goes</h2>${hbars(spent, { fmt: v => v + '%' })}` : ''}</div>
+      <div>${eng.length ? `<h2>Recent activity</h2>${hbars(eng.map(e => ({ label: e.Event, v: +e.Occurrences })))}` : ''}</div>
+    </div>
+    ${interests.length ? `<h2>What Snapchat thinks you're into</h2><div class="chips">${interests.map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div>` : ''}
+    ${content.length ? `<h2>Content it shows you</h2><div class="chips">${content.map(s => `<span class="chip">${esc(String(s).split('/').pop())}</span>`).join('')}</div>` : ''}
+    ${ads.length ? `<h2>Ads you interacted with</h2><div class="rows">${ads.map(a => `<div class="row"><div class="ico">📣</div><div class="meta"><div>${esc(a['Advertiser Name'])}</div><div class="muted">${fmtD(pd(a.Date))}</div></div></div>`).join('')}</div>` : ''}
+  </div></section>`;
+  $('#recapYears').onclick = e => { const b = e.target.closest('button'); if (b) { recapYear = b.dataset.y; drawRecap(); } };
+  columns($('#cVol'), { height: 220, cats: cats.map(catLabel), tipHead: c => Y ? `${c} ${Y}` : c, series: [
+    { name: 'Sent', color: 'var(--c-me)', values: cats.map(k => bucket[k]?.[0] || 0) },
+    { name: 'Received', color: 'var(--c-them)', values: cats.map(k => bucket[k]?.[1] || 0) }] });
+  const hm = $('#heat');
+  const ht = e => { const c = e.target.closest('.cell'); if (!c) return; showTip(e, `${DAYS[c.dataset.d]} · ${hourLbl(+c.dataset.h)}`, [['var(--c-them)', fmtN(heat[c.dataset.d][c.dataset.h]), 'messages']]); };
+  hm.addEventListener('pointermove', ht); hm.addEventListener('focusin', ht);
+  hm.addEventListener('pointerleave', hideTip); hm.addEventListener('focusout', hideTip);
+  const tb = $('.two .hbars');
+  if (tb) tb.onclick = e => { const b = e.target.closest('button[data-i]'); if (b) openFriend(top[b.dataset.i][0].id); };
+}
+
+/* ---------- memories ---------- */
+let memFilter = 'all', memYear = '';
+function drawMemories() {
+  const years = [...new Set(D.memories.map(m => m.d.slice(0, 4)))];
+  const vids = D.memories.filter(m => isVid(m.main)).length;
+  const now = new Date(), md = String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  const otd = D.memories.filter(m => m.d.slice(5) === md && +m.d.slice(0, 4) < now.getFullYear()).map(memItem);
+  $('#body').innerHTML = `<section class="page" id="page"><div class="page-inner">
+    <h1>Memories</h1><p class="sub">${fmtN(D.memories.length)} saved · ${fmtN(D.memories.length - vids)} photos · ${fmtN(vids)} videos · since ${years[years.length - 1] || '—'}</p>
+    ${otd.length ? `<div class="month" style="margin-top:6px">On this day</div><div class="otd" id="otd">${otd.map((m, i) => memTile(m, i, `${now.getFullYear() - +m.d.slice(0, 4)}y ago`)).join('')}</div>` : ''}
+    <div class="chips" id="memChips" style="margin-top:14px">
+      ${[['all', 'All'], ['img', 'Photos'], ['vid', 'Videos']].map(([k, l]) => `<button data-f="${k}" class="${memFilter === k ? 'on' : ''}">${l}</button>`).join('')}
+      <select id="memYear" aria-label="Year"><option value="">All years</option>${years.map(y => `<option${y === memYear ? ' selected' : ''}>${y}</option>`).join('')}</select>
+    </div>
+    <div id="memGrid"></div><div id="memSentinel" style="height:1px"></div></div></section>`;
+  if (otd.length) { lazy($('#otd')); $('#otd').onclick = e => { const t = e.target.closest('.tile'); if (t) openLb(otd, +t.dataset.i); }; }
+  $('#memChips').onclick = e => { const b = e.target.closest('button'); if (b) { memFilter = b.dataset.f; drawMemories(); } };
+  $('#memYear').onchange = e => { memYear = e.target.value; drawMemories(); };
+
+  const items = D.memories.filter(m => (memFilter === 'all' || (memFilter === 'vid') === isVid(m.main)) && (!memYear || m.d.startsWith(memYear))).map(memItem);
+  const grid = $('#memGrid');
+  if (!items.length) { grid.innerHTML = '<div class="empty" style="padding:60px 0">No memories here</div>'; return; }
+  let done = 0, lastMonth = null, cur = null;
+  const batch = () => {
+    const end = Math.min(items.length, done + 180);
+    for (; done < end; done++) {
+      const m = items[done], mo = m.d.slice(0, 7);
+      if (mo !== lastMonth) {
+        lastMonth = mo;
+        const h = document.createElement('div'); h.className = 'month';
+        h.textContent = new Date(mo + '-15').toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        cur = document.createElement('div'); cur.className = 'grid';
+        grid.append(h, cur);
+      }
+      cur.insertAdjacentHTML('beforeend', memTile(m, done));
+    }
+    lazy(grid);
+  };
+  batch();
+  const so = new IntersectionObserver(es => { if (es[0].isIntersecting && done < items.length) batch(); }, { root: $('#page'), rootMargin: '1200px' });
+  so.observe($('#memSentinel'));
+  grid.onclick = e => { const t = e.target.closest('.tile'); if (t) openLb(items, +t.dataset.i); };
+  grid.onmouseover = e => { const v = e.target.closest('.tile')?.querySelector('video[src]'); if (v) v.play().catch(() => {}); };
+  grid.onmouseout = e => { const v = e.target.closest('.tile')?.querySelector('video'); if (v && !e.relatedTarget?.closest?.('.tile')) { v.pause(); } };
+}
+
+/* ---------- friends ---------- */
+let friendTab = 'Friends', friendQ = '';
+function drawFriends() {
+  const groups = Object.entries(D.friends).filter(([, v]) => Array.isArray(v) && v.length);
+  if (!groups.find(([k]) => k === friendTab)) friendTab = groups[0]?.[0];
+  const chatWith = new Map(D.conversations.filter(c => c.user).map(c => [c.user, c]));
+  $('#body').innerHTML = `<section class="page"><div class="page-inner" style="max-width:720px">
+    <h1>Friends</h1><p class="sub">${fmtN((D.friends.Friends || []).length)} friends</p>
+    <div class="chips" id="fChips">${groups.map(([k, v]) => `<button data-t="${esc(k)}" class="${k === friendTab ? 'on' : ''}">${esc(k)} <span class="muted">${v.length}</span></button>`).join('')}</div>
+    <label class="search" style="margin-bottom:14px">${I.search}<input id="fq" placeholder="Search friends" value="${esc(friendQ)}"></label>
+    <div class="rows" id="fRows"></div></div></section>`;
+  const drawRows = () => {
+    const q = friendQ.toLowerCase();
+    const list = (D.friends[friendTab] || []).filter(f => !q || JSON.stringify(f).toLowerCase().includes(q))
+      .sort((a, b) => (a['Display Name'] || a.Username || '').localeCompare(b['Display Name'] || b.Username || ''));
+    $('#fRows').innerHTML = list.map(f => {
+      const name = f['Display Name'] || f.Username || '—', since = pd(f['Creation Timestamp']), c = chatWith.get(f.Username);
+      const n = c ? stats(c).sent + stats(c).recv : 0;
+      return `<button class="row" data-u="${esc(f.Username)}">${avatar(name, 40)}<div class="meta"><div>${esc(name)}</div>
+        <div class="muted">${f.Username ? '@' + esc(f.Username) : ''}${since ? ' · since ' + fmtD(since, { month: 'short', year: 'numeric' }) : ''}${n ? ' · ' + fmtN(n) + ' messages' : ''}</div></div>
+        ${c ? '<span class="act">Profile</span>' : ''}</button>`;
+    }).join('') || '<div class="row muted">Nobody here</div>';
+  };
+  drawRows();
+  $('#fChips').onclick = e => { const b = e.target.closest('button'); if (b) { friendTab = b.dataset.t; drawFriends(); } };
+  $('#fq').oninput = e => { friendQ = e.target.value; drawRows(); };
+  $('#fRows').onclick = e => { const b = e.target.closest('[data-u]'); if (b && b.dataset.u) openFriend(b.dataset.u); };
+}
+
+/* ---------- profile ---------- */
+const renderVal = v => {
+  if (v == null || v === '') return '<span class="muted">—</span>';
+  if (Array.isArray(v)) {
+    if (!v.length) return '<span class="muted">None</span>';
+    if (typeof v[0] !== 'object') return esc(v.join(', '));
+    const cols = [...new Set(v.flatMap(o => Object.keys(o)))];
+    return `<div class="tbl"><table><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr>${v.slice(0, 500).map(o => `<tr>${cols.map(c => `<td>${typeof o[c] === 'object' && o[c] ? esc(JSON.stringify(o[c])) : esc(o[c])}</td>`).join('')}</tr>`).join('')}</table>${v.length > 500 ? `<p class="muted">Showing 500 of ${fmtN(v.length)}</p>` : ''}</div>`;
+  }
+  if (typeof v === 'object') return `<div class="kv" style="padding:0">${Object.entries(v).map(([k, x]) => `<div>${esc(k)}</div><div>${typeof x === 'object' && x ? esc(JSON.stringify(x)) : esc(x)}</div>`).join('')}</div>`;
+  return esc(v);
+};
+const section = (t, v) => {
+  if (Array.isArray(v)) return `<details class="raw"><summary>${esc(t)} <span class="muted">${v.length}</span></summary>${renderVal(v)}</details>`;
+  if (v && typeof v === 'object') return `<details class="raw"><summary>${esc(t)}</summary><div class="kv">${Object.entries(v).map(([k, x]) =>
+    `<div>${esc(k)}</div><div>${renderVal(x)}</div>`).join('')}</div></details>`;
+  return `<details class="raw"><summary>${esc(t)}</summary><div class="kv"><div></div><div>${renderVal(v)}</div></div></details>`;
+};
+const DEVICES = { 'iPhone13,4': 'iPhone 12 Pro Max', 'iPhone13,3': 'iPhone 12 Pro', 'iPhone14,3': 'iPhone 13 Pro Max', 'iPhone14,2': 'iPhone 13 Pro',
+  'iPhone15,3': 'iPhone 14 Pro Max', 'iPhone15,2': 'iPhone 14 Pro', 'iPhone16,2': 'iPhone 15 Pro Max', 'iPhone16,1': 'iPhone 15 Pro',
+  'iPhone17,2': 'iPhone 16 Pro Max', 'iPhone17,1': 'iPhone 16 Pro', 'iPad13,1': 'iPad Air (4th gen)', 'iPad13,2': 'iPad Air (4th gen)' };
+const dur = s => { s = +s || 0; return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + (s % 60) + 's'; };
+function drawProfile() {
+  const b = D.account['Basic Information'] || {};
+  const name = b.Name || D.me, created = pd(b['Creation Date']);
+  const msgs = D.conversations.reduce((a, c) => a + c.msgs.length, 0);
+  const sent = D.conversations.reduce((a, c) => a + stats(c).sent, 0);
+  const top = [...D.conversations].sort((a, b) => b.msgs.length - a.msgs.length).slice(0, 8);
+  const score = D.ranking.Statistics?.Snapscore;
+  const yrs = created ? Math.floor((Date.now() - created) / 31557600000) : null;
+  const devices = (D.account['Device History'] || []).map(d => ({ ...d, t: pd(d['Start Time']) })).sort((a, b) => (b.t || 0) - (a.t || 0));
+  const names = (D.accountHistory['Display Name Change'] || []).map(n => ({ ...n, t: pd(n.Date) })).sort((a, b) => b.t - a.t)
+    .filter((n, i, a) => i === a.length - 1 || n['Display Name'] !== a[i + 1]['Display Name']);
+  const calls = [...(D.calls['Outgoing Calls'] || []).map(c => ({ ...c, dir: 'out' })), ...(D.calls['Incoming Calls'] || []).map(c => ({ ...c, dir: 'in' }))]
+    .map(c => ({ ...c, t: pd(c['Date & Time']) })).sort((a, b) => b.t - a.t);
+  const apps = D.connectedApps.Permissions || [];
+  $('#body').innerHTML = `<section class="page"><div class="page-inner" style="max-width:880px">
+    <div class="card">${avatar(name, 88)}<div><h1>${esc(name)}</h1><div class="muted" style="font-size:15px">@${esc(D.me)}${created ? ' · joined ' + fmtD(created, { day: 'numeric', month: 'long', year: 'numeric' }) : ''}</div>
+      ${score ? `<span class="score">👻 ${fmtN(Math.round(+score))} Snapscore</span>` : ''}${yrs ? ` <span class="score" style="background:var(--chip);color:var(--text)">🎂 ${yrs} years on Snapchat</span>` : ''}</div></div>
+    <div class="stats">
+      <div class="stat"><b>${fmtN(msgs)}</b><span class="muted">messages</span></div>
+      <div class="stat"><b>${fmtN(sent)}</b><span class="muted">sent by you</span></div>
+      <div class="stat"><b>${fmtN(D.conversations.length)}</b><span class="muted">conversations</span></div>
+      <div class="stat"><b>${fmtN(D.memories.length)}</b><span class="muted">memories</span></div>
+      <div class="stat"><b>${fmtN((D.friends.Friends || []).length)}</b><span class="muted">friends</span></div>
+      ${D.stickers.length ? `<div class="stat"><b>${fmtN(D.stickers.length)}</b><span class="muted">custom stickers made</span></div>` : ''}
+    </div>
+    <h2>Most messaged</h2>
+    <div class="rows" id="top">${top.map(c => `<button class="row" data-c="${esc(c.id)}">${avatar(c.name, 36)}<div class="meta"><div>${esc(c.name)}</div>
+      <div class="muted">${fmtN(c.msgs.length)} messages${stats(c).streak > 1 ? ` · 🔥 ${stats(c).streak}-day streak record` : ''}</div></div><span class="act">Profile</span></button>`).join('')}</div>
+    <div class="two">
+      <div>${devices.length ? `<h2>Your devices</h2><div class="rows">${devices.map((d, i) => `<div class="row"><div class="ico">${/iPad/.test(d.Model) ? '💻' : '📱'}</div><div class="meta">
+        <div>${esc(DEVICES[d.Model] || d.Model)}${i === 0 ? ' <span class="muted">· current</span>' : ''}</div><div class="muted">${DEVICES[d.Model] ? esc(d.Model) + ' · ' : ''}from ${fmtD(d.t)}</div></div></div>`).join('')}</div>` : ''}</div>
+      <div>${names.length ? `<h2>Display name history</h2><div class="rows">${names.map(n => `<div class="row"><div class="ico">✏️</div><div class="meta"><div>${esc(n['Display Name'])}</div><div class="muted">${fmtD(n.t)}</div></div></div>`).join('')}</div>` : ''}</div>
+    </div>
+    <div class="two">
+      <div>${calls.length ? `<h2>Calls</h2><div class="rows">${calls.map(c => `<div class="row"><div class="ico">${c.Type === 'VIDEO' ? '🎥' : '📞'}</div><div class="meta">
+        <div>${c.dir === 'out' ? 'Outgoing' : 'Incoming'} ${esc((c.Type || '').toLowerCase())} call · ${dur(c['Length (sec)'])}</div>
+        <div class="muted">${esc(fmtDT(c.t))}${c.City ? ' · ' + esc(title(c.City)) : ''}${c.Result ? ' · ' + esc(c.Result) : ''}</div></div></div>`).join('')}</div>` : ''}</div>
+      <div>${apps.length ? `<h2>Connected apps</h2><div class="rows">${apps.map(a => `<div class="row"><div class="ico">🔗</div><div class="meta"><div>${esc(a.App)}</div><div class="muted">${esc(a.Type || '')} · ${fmtD(pd(a.Time))}</div></div></div>`).join('')}</div>` : ''}</div>
+    </div>
+    <h2>All account data</h2>
+    ${[['Account', D.account], ['Account history', D.accountHistory], ['Profile & ads', D.profile], ['Ranking', D.ranking], ['Bitmoji', D.bitmoji],
+       ['Connected apps', D.connectedApps], ['Terms accepted', D.terms], ['Search history', D.searches]]
+      .flatMap(([grp, o]) => Object.entries(o || {}).map(([k, v]) => section(`${grp} · ${k || 'Entries'}`, v))).join('')}
+  </div></section>`;
+  $('#top').onclick = e => { const b = e.target.closest('[data-c]'); if (b) openFriend(b.dataset.c); };
+}
+
+/* ---------- loading an export ---------- */
+// Turns the export's files ([{ path, file }]) into the shape every view reads. Nothing leaves the browser.
+async function buildData(entries) {
+  const json = {};
+  FILES.chat_media.clear(); FILES.memories.clear();
+  for (const { path, file } of entries) {
+    const parts = path.split('/').filter(Boolean), name = parts.at(-1), dir = parts.at(-2);
+    if (!name || name.startsWith('.')) continue;
+    if (dir === 'chat_media' || dir === 'memories') FILES[dir].set(name, file);
+    else if (name.endsWith('.json') && (dir === 'json' || !json[name])) json[name] = file;
+  }
+  if (!json['chat_history.json'] && !json['memories_history.json'] && !json['account.json']) throw new Error('nojson');
+  const J = async n => { try { return json[n] ? JSON.parse(await json[n].text()) : {}; } catch { return {}; } };
+  const obj = v => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+
+  // chat_media files are named DATE_<MediaID>.ext
+  const chatMedia = new Map();
+  for (const f of FILES.chat_media.keys()) {
+    const i = f.indexOf('_'); if (i < 0) continue;
+    const id = f.slice(i + 1).replace(/\.[^.]+$/, '');
+    if (!chatMedia.has(id)) chatMedia.set(id, []);
+    chatMedia.get(id).push(f);
+  }
+  const account = obj(await J('account.json')), friends = obj(await J('friends.json'));
+  const chats = obj(await J('chat_history.json')), snaps = obj(await J('snap_history.json'));
+  let me = account['Basic Information']?.Username || '';
+  if (!me) for (const list of Object.values(chats)) { const m = Array.isArray(list) && list.find(m => m?.IsSender); if (m) { me = m.From; break; } }
+  const names = {};
+  for (const g of Object.values(friends)) if (Array.isArray(g)) for (const f of g) if (f?.Username) names[f.Username] = f['Display Name'] || f.Username;
+  if (me) names[me] = account['Basic Information']?.Name || me;
+  const ts = m => m['Created(microseconds)'] ?? pd(m.Created)?.getTime() ?? 0;
+
+  const conversations = [];
+  for (const key of new Set([...Object.keys(chats), ...Object.keys(snaps)])) {
+    const msgs = []; let title = null;
+    for (const m of Array.isArray(chats[key]) ? chats[key] : []) {
+      if (!m || typeof m !== 'object') continue;
+      title ||= m['Conversation Title'];
+      const files = [];
+      for (const id of String(m['Media IDs'] || '').split('|').map(x => x.trim()).filter(Boolean)) files.push(...(chatMedia.get(id) || []));
+      msgs.push({ t: ts(m), f: m.From || '', k: m['Media Type'] || 'TEXT', c: m.Content || '', m: files, x: m['Media IDs'] ? 1 : 0, s: m.IsSaved ? 1 : 0 });
+    }
+    for (const m of Array.isArray(snaps[key]) ? snaps[key] : []) {
+      if (m && typeof m === 'object') msgs.push({ t: ts(m), f: m.From || '', k: 'SNAP_' + (m['Media Type'] || 'IMAGE'), c: '', m: [], x: 0, s: 0 });
+    }
+    if (!msgs.length) continue;
+    msgs.sort((a, b) => a.t - b.t);
+    conversations.push({ id: key, group: !!title, name: title ? title.trim() : names[key] || key, user: title ? null : key,
+      members: [...new Set(msgs.map(m => m.f))].sort(), last: msgs.at(-1).t, msgs });
+  }
+  conversations.sort((a, b) => b.last - a.last);
+
+  // memories: DATE_UUID-main.ext (+ optional DATE_UUID-overlay.png)
+  const mem = {};
+  for (const f of FILES.memories.keys()) {
+    const m = /^(\d{4}-\d{2}-\d{2})_(.+)-(main|overlay)\.(\w+)$/.exec(f); if (!m) continue;
+    (mem[m[2]] ??= { d: m[1] })[m[3]] = f;
+  }
+  const memories = Object.values(mem).filter(v => v.main).sort((a, b) => b.d < a.d ? -1 : b.d > a.d ? 1 : 0);
+
+  // where memories were taken; files carry no id, so the map links points to files by day
+  const memPlaces = [];
+  for (const m of obj(await J('memories_history.json'))['Saved Media'] || []) {
+    const c = /(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/.exec(m?.Location || ''), t = pd(m?.Date);
+    if (c && t && !(+c[1] === 0 && +c[2] === 0)) memPlaces.push([t.getTime(), String(m['Media Type'] || '').slice(0, 1), +c[1], +c[2]]);
+  }
+
+  return {
+    me, names, conversations, memories, memPlaces, friends, account,
+    profile: obj(await J('user_profile.json')),
+    accountHistory: obj(await J('account_history.json')),
+    location: obj(await J('location_history.json')),
+    places: obj(await J('snap_map_places_history.json'))['Snap Map Places History'] || [],
+    stories: obj(await J('story_history.json')),
+    calls: obj(await J('talk_history.json')),
+    ranking: obj(await J('ranking.json')),
+    bitmoji: obj(await J('bitmoji.json')),
+    connectedApps: obj(await J('connected_apps.json')),
+    stickers: obj(await J('custom_sticker.json'))['My Custom Stickers'] || [],
+    terms: obj(await J('terms_history.json')),
+    searches: obj(await J('search_history.json')),
+  };
+}
+
+async function readEntry(entry, out) {
+  if (entry.isFile) { out.push({ path: entry.fullPath, file: await new Promise((res, rej) => entry.file(res, rej)) }); return; }
+  if (entry.name === 'html') return; // Snapchat's own HTML pages aren't needed
+  const reader = entry.createReader();
+  for (;;) {
+    const batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+    if (!batch.length) break;
+    await Promise.all(batch.map(e => readEntry(e, out)));
+  }
+}
+
+async function load(getEntries) {
+  if (!$('#landStatus')) drawLanding();
+  const status = $('#landStatus');
+  status.textContent = 'Reading your export…'; status.className = 'land-status';
+  try {
+    const entries = await getEntries();
+    if (entries.some(e => /\.zip$/i.test(e.path)) && !entries.some(e => /\.json$/i.test(e.path))) throw new Error('zip');
+    status.textContent = `Reading ${fmtN(entries.length)} files…`;
+    D = await buildData(entries);
+    storyViews = D.stories['Friend and Public Story Views'] || [];
+    $('#app').classList.remove('landing');
+    go('chats');
+  } catch (e) {
+    status.className = 'land-status err';
+    status.textContent = e.message === 'zip' ? 'That looks like a .zip file. Unzip it first, then open the folder.'
+      : e.message === 'nojson' ? "Couldn't find Snapchat's JSON files in that folder. When requesting your data, tick “Export JSON files”, then open the unzipped folder."
+      : 'Something went wrong reading that folder: ' + e.message;
+  }
+}
+
+function drawLanding() {
+  $('#app').classList.add('landing');
+  $('#body').innerHTML = `<section class="land"><div class="land-card">
+    <div class="logo" style="width:56px;height:56px;border-radius:16px;margin:0 auto 18px">${I.ghost}</div>
+    <h1>View your Snapchat data</h1>
+    <p class="sub">Chats with their photos and videos, memories, a map, stories and a recap, laid out like the app.</p>
+    <label class="drop" id="drop" tabindex="0">
+      <input type="file" id="pick" webkitdirectory directory multiple hidden>
+      <b>Drop your unzipped export folder here</b><span class="muted">or click to choose it. Downloaded in parts? Drop all the folders at once.</span>
+    </label>
+    <p class="land-status" id="landStatus" role="status"></p>
+    <p class="muted">🔒 Everything happens in your browser. Nothing is uploaded, and your data isn't stored after you close the page.</p>
+    <details class="howto"><summary>How do I get my data?</summary><ol>
+      <li>In Snapchat, open <b>Settings → My Data</b> (or visit accounts.snapchat.com and choose My Data).</li>
+      <li>Tick <b>Export your Memories</b>, <b>Export JSON files</b> and the categories you want, then pick a date range.</li>
+      <li>Submit. Snapchat emails you when the download is ready. It can be several files for big accounts.</li>
+      <li>Unzip everything, then drop the folder (or folders) here.</li></ol></details>
+  </div></section>`;
+  const drop = $('#drop');
+  $('#pick').onchange = e => { const fl = [...e.target.files]; load(async () => fl.filter(f => !/\/html\//.test(f.webkitRelativePath)).map(f => ({ path: f.webkitRelativePath || f.name, file: f }))); };
+  drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#pick').click(); } };
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = e => {
+    e.preventDefault(); drop.classList.remove('over');
+    const items = [...e.dataTransfer.items].map(i => i.webkitGetAsEntry?.()).filter(Boolean);
+    load(async () => { const out = []; for (const it of items) await readEntry(it, out); return out; });
+  };
+}
+// Hook for tests and tooling: SnapViewer.load([{ path, file }])
+window.SnapViewer = { load: entries => load(async () => entries) };
+
+drawRail();
+drawLanding();
+})();
+</script>
+</body>
+</html>
